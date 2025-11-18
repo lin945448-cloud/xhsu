@@ -1,34 +1,40 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
+# app.py
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-from matplotlib.font_manager import FontProperties, findSystemFonts
+import matplotlib.font_manager as fm # 导入字体管理器
 import io  # 用于在内存中创建文件
-import os
+import os # 用于处理文件路径
 
-# ---------- ✅全局中文字体设置（通用方案） ----------
-try:
-    # 尝试自动使用 Streamlit Cloud 等环境可识别的常见中文字体
-    candidate_fonts = ['SimHei', 'Microsoft YaHei', 'Source Han Sans CN', 'Noto Sans CJK SC', 'Arial Unicode MS']
-    available_fonts = [f for f in candidate_fonts if any(f in p for p in findSystemFonts())]
-    if available_fonts:
-        chosen_font = available_fonts[0]
-    else:
-        chosen_font = 'DejaVu Sans'  # fallback 字体，最不济至少不会报错
-    
-    plt.rcParams['font.sans-serif'] = [chosen_font]
-    plt.rcParams['axes.unicode_minus'] = False
-    font_prop = FontProperties(fname=None, family=chosen_font)
-    st.info(f"当前使用字体：{chosen_font} ✅ 中文支持已启用")
-except Exception as e:
-    st.warning(f"中文字体设置失败，图表中的中文可能显示为方块。错误：{e}")
-    font_prop = None
+# ==============================================================================
+# 核心修改：从项目文件中加载中文字体
+# ==============================================================================
+# 定义字体文件的路径 (假设它和 app.py 在同一个目录下)
+font_path = 'SourceHanSansSC-Regular.otf'
+
+# 检查字体文件是否存在
+if os.path.exists(font_path):
+    # 使用字体管理器加载字体
+    # 这会告诉matplotlib，我们有一个新的字体可以使用
+    fm.fontManager.addfont(font_path)
+    plt.rcParams['font.family'] = 'sans-serif' # 必须先设置字体家族
+    # 'Source Han Sans SC' 是思源黑体的内部名称，通过addfont后就可以识别
+    plt.rcParams['font.sans-serif'] = ['Source Han Sans SC', 'SimHei'] 
+    plt.rcParams['axes.unicode_minus'] = False # 解决负号显示问题
+    st.sidebar.info("中文字体加载成功！")
+else:
+    # 如果在云端或本地找不到字体文件，给出明确的提示
+    st.sidebar.warning(
+        f"未找到字体文件 '{font_path}'。请确保已将字体文件上传到项目根目录。\n"
+        "图表中的中文可能显示为方块。"
+    )
+    plt.rcParams['axes.unicode_minus'] = False # 即使字体失败，也尝试解决负号问题
+
+# ==============================================================================
+# 您原来的代码保持不变
+# ==============================================================================
 
 # ==============================================================================
 # 将核心分析逻辑封装成一个函数，方便对每个文件重复调用
@@ -52,7 +58,7 @@ def analyze_and_display(df, filename):
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         st.error(f"文件 '{filename}' 缺少必要列：{missing}，已跳过此文件。")
-        return None
+        return None  # 返回None表示处理失败
 
     # ---------- 3️⃣ 日期解析与排序 ----------
     df["首次发布时间"] = pd.to_datetime(df["首次发布时间"], format='%Y年%m月%d日%H时%M分%S秒', errors='coerce')
@@ -105,17 +111,16 @@ def analyze_and_display(df, filename):
     with col1:
         st.subheader("🎨 内容形式分布")
         fig_pie, ax_pie = plt.subplots()
-        df["体裁"].value_counts().plot.pie(
-            ax=ax_pie,
-            autopct="%1.1f%%",
-            startangle=90,
-            colors=["#ff9999", "#66b3ff"],
-            textprops={'color': "white", 'fontproperties': font_prop}
+        pie_data = df["体裁"].value_counts()
+        # 修复pie图例和标签都显示中文的问题
+        ax_pie.pie(
+            pie_data, autopct="%1.1f%%", startangle=90,
+            colors=["#ff9999", "#66b3ff"], textprops={'color':"w"}
         )
         ax_pie.set_ylabel('')
-        ax_pie.set_title("图文 vs 视频比例", color='white', fontproperties=font_prop)
+        ax_pie.set_title("图文 vs 视频比例", color='w') # <- 这个标题现在可以正确显示了
         fig_pie.set_facecolor('#0E1117')
-        ax_pie.legend(labels=df["体裁"].value_counts().index, loc="upper right", prop=font_prop)
+        ax_pie.legend(labels=pie_data.index, loc="upper right") # <- 这个图例现在也可以正确显示了
         st.pyplot(fig_pie)
 
     # 绘制折线图的辅助函数
@@ -124,19 +129,15 @@ def analyze_and_display(df, filename):
             ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
             for x, y in zip(df["序号"], df[col]):
                 if pd.notna(y):
-                    if '%' in col or '率' in col:
-                        label = f"{y:.1%}"
-                    elif y < 1 and y > 0:
-                        label = f"{y:.2f}"
-                    else:
-                        label = f"{int(y)}"
-                    ax.text(x, y, label, ha="center", va="bottom",
-                            fontsize=7, color='grey', fontproperties=font_prop)
-        ax.set_xlabel("笔记序号", fontproperties=font_prop)
-        ax.set_ylabel("数值", fontproperties=font_prop)
-        ax.set_title(title, fontproperties=font_prop)
+                    if '%' in col or '率' in col: label = f"{y:.1%}"
+                    elif y < 1 and y > 0: label = f"{y:.2f}"
+                    else: label = f"{int(y)}"
+                    ax.text(x, y, label, ha="center", va="bottom", fontsize=7, color='grey')
+        ax.set_xlabel("笔记序号") # <- 这个标签现在可以正确显示了
+        ax.set_ylabel("数值")   # <- 这个标签现在可以正确显示了
+        ax.set_title(title)     # <- 这个标题现在可以正确显示了
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.legend(prop=font_prop)
+        ax.legend()             # <- 这个图例现在可以正确显示了
         ax.grid(True, linestyle="--", alpha=0.6)
 
     st.subheader("📈 各篇笔记指标表现")
@@ -148,15 +149,16 @@ def analyze_and_display(df, filename):
     plot_with_labels(ax2, "基础数据表现", ["曝光", "观看量", "点赞", "收藏", "分享"], df)
     st.pyplot(fig2)
     
-    return df
+    return df # 返回处理好的df，用于后续汇总
 
 # ==============================================================================
 # 主应用逻辑
 # ==============================================================================
-st.set_page_config(page_title="小红书数据分析平台", layout="wide")
+st.set_page_config(page_title="小红书数据批量分析平台", layout="wide")
 st.title("📊 小红书数据批量分析与报告生成")
 st.markdown("您可以上传**一个或多个**Excel文件，系统将逐一分析并在下方展示结果，最后提供一个汇总的Excel报告供您下载。")
 
+# --- 核心修改1：允许多文件上传 ---
 uploaded_files = st.file_uploader(
     "请上传小红书后台导出的 Excel 文件", 
     type=["xls", "xlsx"], 
@@ -164,27 +166,37 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    processed_dfs = {}
+    processed_dfs = {} # 用于存储所有处理好的DataFrame
 
+    # --- 核心修改2：循环处理每个文件 ---
     for uploaded_file in uploaded_files:
         try:
+            # 读取文件
             df_raw = pd.read_excel(uploaded_file, header=1)
+            # 调用分析函数
             df_processed = analyze_and_display(df_raw, uploaded_file.name)
+            
+            # 如果分析成功，则存入字典，用于最后汇总下载
             if df_processed is not None:
+                # 清理文件名作为Sheet名，避免特殊字符和过长
                 sheet_name = ''.join(e for e in uploaded_file.name if e.isalnum())[:31]
                 processed_dfs[sheet_name] = df_processed
+
         except Exception as e:
             st.error(f"处理文件 {uploaded_file.name} 时发生严重错误: {e}")
 
+    # --- 核心修改3：提供汇总下载按钮 ---
     if processed_dfs:
         st.header("--- 报告下载 ---", divider='rainbow')
         st.success("所有文件分析完成！您可以下载包含所有详细数据的汇总Excel报告。")
         
+        # 创建一个内存中的Excel文件
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
             for sheet_name, df_to_write in processed_dfs.items():
                 df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
         
+        # 提供下载按钮
         st.download_button(
             label="📥 下载汇总Excel报告",
             data=output_buffer.getvalue(),
@@ -194,4 +206,3 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传一个或多个Excel文件开始分析。")
-
