@@ -112,7 +112,7 @@ def analyze_and_display(df, filename):
         ax_pie.legend(labels=pie_data.index, loc="upper right")
         st.pyplot(fig_pie)
 
-    # 折线图辅助函数
+    # ---------- 核心互动/基础表现折线图 ----------
     def plot_with_labels(ax, title, cols, df):
         for col in cols:
             ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
@@ -124,9 +124,9 @@ def analyze_and_display(df, filename):
                         label = f"{y:.2f}"
                     else:
                         label = f"{int(y)}"
-                    ax.text(x, y + y*0.05 if y != 0 else 0.05, label,
+                    ax.text(x, y + y * 0.05 if y != 0 else 0.05, label,
                             ha="center", va="bottom", fontsize=7, color='grey')
-        ax.margins(y=0.4)
+        ax.margins(y=0.2)  # 为标注留20%垂直空间
         ax.set_xlabel("笔记序号")
         ax.set_ylabel("数值")
         ax.set_title(title)
@@ -145,9 +145,7 @@ def analyze_and_display(df, filename):
                      ["曝光", "观看量", "点赞", "收藏", "分享"], df)
     st.pyplot(fig2)
 
-    # ====================================================
-    # 🌟 每个指标单独图，留白空间+特定格式
-    # ====================================================
+    # ---------- 每个指标的单独图 ----------
     st.subheader("📊 各单项指标趋势图")
     indicator_cols = ["点赞率", "收藏率", "赞藏比", "评论率", "互动率", "有效活跃度", "转粉率"]
     for col in indicator_cols:
@@ -156,7 +154,7 @@ def analyze_and_display(df, filename):
 
         for x, y in zip(df["序号"], df[col]):
             if pd.notna(y):
-                # 针对特定指标使用不同格式
+                # 特定格式
                 if col in ["赞藏比", "有效活跃度"]:
                     label = f"{y:.2f}"
                 elif '率' in col:
@@ -165,13 +163,11 @@ def analyze_and_display(df, filename):
                     label = f"{y:.2f}"
                 else:
                     label = f"{int(y)}"
-                # 垂直偏移 + 大号字体
-                offset = (abs(y) * 0.1 if y != 0 else 0.05)
+                offset = abs(y) * 0.1 if y != 0 else 0.05
                 ax.text(x, y + offset, label,
                         ha="center", va="bottom", fontsize=9, color='grey')
 
-        # 增加边距避免标题遮挡
-        ax.margins(y=0.4)
+        ax.margins(y=0.2)
         ax.set_title(f"{col} 趋势图")
         ax.set_xlabel("笔记序号")
         ax.set_ylabel(col)
@@ -193,8 +189,12 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+processed_dfs = {}  # 用于保存分析结果
+
+# 如果已有分析结果，则优先显示下载按钮在顶部
 if uploaded_files:
-    processed_dfs = {}
+    # 临时容器用于显示下载按钮
+    placeholder_download = st.empty()
 
     for uploaded_file in uploaded_files:
         try:
@@ -206,20 +206,23 @@ if uploaded_files:
         except Exception as e:
             st.error(f"处理文件 {uploaded_file.name} 时发生严重错误: {e}")
 
+    # 当所有文件都分析完后，生成报告按钮放上面
     if processed_dfs:
-        st.header("--- 报告下载 ---", divider='rainbow')
-        st.success("所有文件分析完成！可下载汇总Excel报告。")
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
             for sheet_name, df_to_write in processed_dfs.items():
                 df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
-        st.download_button(
-            label="📥 下载汇总Excel报告",
-            data=output_buffer.getvalue(),
-            file_name="小红书分析汇总报告.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        st.balloons()
+
+        with placeholder_download.container():
+            st.header("📥 汇总报告下载", divider='rainbow')
+            st.success("所有文件分析完成！您可以直接下载汇总Excel报告。")
+            st.download_button(
+                label="⬇️ 下载汇总Excel报告",
+                data=output_buffer.getvalue(),
+                file_name="小红书分析汇总报告.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            st.balloons()
+
 else:
     st.info("👆 请上传一个或多个Excel文件开始分析。")
-
