@@ -126,6 +126,7 @@ def analyze_and_display(df, filename):
                         label = f"{int(y)}"
                     ax.text(x, y + y*0.05 if y != 0 else 0.05, label,
                             ha="center", va="bottom", fontsize=7, color='grey')
+        ax.margins(y=0.4)
         ax.set_xlabel("笔记序号")
         ax.set_ylabel("数值")
         ax.set_title(title)
@@ -170,7 +171,7 @@ def analyze_and_display(df, filename):
                         ha="center", va="bottom", fontsize=9, color='grey')
 
         # 增加边距避免标题遮挡
-        ax.margins(y=0.2)
+        ax.margins(y=0.4)
         ax.set_title(f"{col} 趋势图")
         ax.set_xlabel("笔记序号")
         ax.set_ylabel(col)
@@ -221,3 +222,4 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传一个或多个Excel文件开始分析。")
+
