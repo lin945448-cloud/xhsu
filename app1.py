@@ -106,12 +106,25 @@ def analyze_and_display(df, filename):
 
     # ---- 平均指标 ----
     st.subheader("📈 核心指标平均值")
-    avg = df[["封面点击率","点赞率","收藏率","互动率","转粉率"]].mean()
+    # 加权/总量法：用总量求转化率
+    total_views = df["观看量"].sum()
+    total_expo = df["曝光"].sum()
+    total_likes = df["点赞"].sum()
+    total_favs = df["收藏"].sum()
+    total_comments = df["评论"].sum()
+    total_follows = df["涨粉"].sum()
+
+    avg_ctr = ((df["封面点击率"] * df["曝光"]).sum() / total_expo) if total_expo else float("nan")
+    avg_like_rate = (total_likes / total_views) if total_views else float("nan")
+    avg_fav_rate = (total_favs / total_views) if total_views else float("nan")
+    avg_eng_rate = ((total_likes + total_comments + total_favs) / total_views) if total_views else float("nan")
+    avg_follow_rate = (total_follows / total_views) if total_views else float("nan")  # 未展示，但保持一致性计算
+
     c1,c2,c3,c4 = st.columns(4)
-    c1.metric("平均封面点击率", f"{avg['封面点击率']:.2%}")
-    c2.metric("平均点赞率", f"{avg['点赞率']:.2%}")
-    c3.metric("平均收藏率", f"{avg['收藏率']:.2%}")
-    c4.metric("平均互动率", f"{avg['互动率']:.2%}")
+    c1.metric("平均封面点击率", f"{avg_ctr:.2%}")
+    c2.metric("平均点赞率", f"{avg_like_rate:.2%}")
+    c3.metric("平均收藏率", f"{avg_fav_rate:.2%}")
+    c4.metric("平均互动率", f"{avg_eng_rate:.2%}")
 
     # ==============================================================================
     # 🎨 生成所有可视化并输出为独立HTML报告
@@ -206,4 +219,3 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
-
