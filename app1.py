@@ -43,7 +43,7 @@ def plot_lines(ax, title, cols, df):
                     label = f"{int(y)}"
                 offset = abs(y) * 0.1 if y != 0 else 0.05
                 ax.text(x, y + offset, label, ha="center", va="bottom", fontsize=8, color='grey')
-    ax.margins(y=0.2)
+    ax.margins(y=0.4)
     ax.set_xlabel("笔记序号")
     ax.set_ylabel("数值")
     ax.set_title(title)
@@ -162,7 +162,7 @@ def analyze_and_display(df, filename):
     # ---- 下载HTML报告按钮 ----
     st.success(f"✅ 已生成可视化报告文件：{os.path.basename(html_path)}")
     with open(html_path, "rb") as f:
-        st.download_button("📊 下载该文件的可视化HTML报告",
+        st.download_button("下载该文件的可视化HTML报告",
                            data=f.read(),
                            file_name=os.path.basename(html_path),
                            mime="text/html")
@@ -198,7 +198,7 @@ if uploaded_files:
             for name, d in processed_dfs.items():
                 d.to_excel(writer, sheet_name=name, index=False)
         with placeholder_top.container():
-            st.header("📦 汇总Excel下载", divider="rainbow")
+            st.header("汇总Excel下载", divider="rainbow")
             st.download_button("⬇️ 下载汇总Excel报告",
                                data=excel_buffer.getvalue(),
                                file_name="小红书分析汇总报告.xlsx",
@@ -206,3 +206,4 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
+
