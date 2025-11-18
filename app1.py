@@ -118,18 +118,17 @@ def analyze_and_display(df, filename):
         st.subheader("🎨 内容形式分布")
         fig_pie, ax_pie = plt.subplots()
         pie_data = df["体裁"].value_counts()
-        # 修复pie图例和标签都显示中文的问题
         ax_pie.pie(
             pie_data, autopct="%1.1f%%", startangle=90,
             colors=["#ff9999", "#66b3ff"], textprops={'color':"w"}
         )
         ax_pie.set_ylabel('')
-        ax_pie.set_title("图文 vs 视频比例", color='w') # <- 这个标题现在可以正确显示了
+        ax_pie.set_title("图文 vs 视频比例", color='w')
         fig_pie.set_facecolor('#0E1117')
-        ax_pie.legend(labels=pie_data.index, loc="upper right") # <- 这个图例现在也可以正确显示了
+        ax_pie.legend(labels=pie_data.index, loc="upper right")
         st.pyplot(fig_pie)
-
-    # 绘制折线图的辅助函数
+    
+    # 辅助函数移动到 col2 外面，避免重复定义
     def plot_with_labels(ax, title, cols, df):
         for col in cols:
             ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
@@ -139,13 +138,14 @@ def analyze_and_display(df, filename):
                     elif y < 1 and y > 0: label = f"{y:.2f}"
                     else: label = f"{int(y)}"
                     ax.text(x, y, label, ha="center", va="bottom", fontsize=7, color='grey')
-        ax.set_xlabel("笔记序号") # <- 这个标签现在可以正确显示了
-        ax.set_ylabel("数值")   # <- 这个标签现在可以正确显示了
-        ax.set_title(title)     # <- 这个标题现在可以正确显示了
+        ax.set_xlabel("笔记序号")
+        ax.set_ylabel("数值")
+        ax.set_title(title)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.legend()             # <- 这个图例现在可以正确显示了
+        ax.legend()
         ax.grid(True, linestyle="--", alpha=0.6)
 
+    # 原始的组合图表
     st.subheader("📈 各篇笔记指标表现")
     fig1, ax1 = plt.subplots(figsize=(12, 5))
     plot_with_labels(ax1, "核心互动指标趋势", ["点赞率", "收藏率", "互动率"], df)
@@ -154,6 +154,38 @@ def analyze_and_display(df, filename):
     fig2, ax2 = plt.subplots(figsize=(12, 5))
     plot_with_labels(ax2, "基础数据表现", ["曝光", "观看量", "点赞", "收藏", "分享"], df)
     st.pyplot(fig2)
+
+    # ==============================================================================
+    # 【新增部分】为每个指标单独生成图表
+    # ==============================================================================
+    st.markdown("---") # 添加分割线
+    st.subheader("📊 单项指标详细趋势")
+    st.markdown("下方为各篇笔记的单项指标表现，方便您进行深入分析。")
+
+    # 定义需要单独可视化的指标列表
+    individual_metrics = [
+        "点赞率", "收藏率", "评论率", "互动率", 
+        "转粉率", "赞藏比", "有效活跃度"
+    ]
+
+    # 创建两列布局来放置图表
+    viz_col1, viz_col2 = st.columns(2)
+
+    # 循环遍历每个指标，并将其绘制在对应的列中
+    for i, metric in enumerate(individual_metrics):
+        # 为每个图表创建一个新的Figure和Axes对象
+        fig_ind, ax_ind = plt.subplots(figsize=(10, 4)) # 调整尺寸以适应列宽
+        
+        # 使用现有的辅助函数绘图，标题动态生成
+        plot_with_labels(ax_ind, f"{metric} 趋势", [metric], df)
+        
+        # 交替在左右两列显示图表
+        if i % 2 == 0:
+            with viz_col1:
+                st.pyplot(fig_ind)
+        else:
+            with viz_col2:
+                st.pyplot(fig_ind)
     
     return df # 返回处理好的df，用于后续汇总
 
