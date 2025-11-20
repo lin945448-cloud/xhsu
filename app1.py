@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, MultipleLocator  # ✅ 加入MultipleLocator
 import matplotlib.font_manager as fm
 import matplotlib.patheffects as path_effects  # ✅ 描边导入
 from adjustText import adjust_text  # ✅ 用于防止标注文字遮挡
@@ -59,64 +59,69 @@ def plot_lines(ax, title, cols, df):
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.6)
 
+
 # ==============================================================================
-# ✅ 改进版：核心互动指标趋势（智能防遮挡 + y轴刻度间隔0.1）
+# ✅ 修改后的核心互动指标趋势函数
 # ==============================================================================
 def plot_core_interaction(df):
     fig, ax = plt.subplots(figsize=(12, 5))
     cols = ["点赞率", "收藏率", "互动率"]
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     texts = []
+    line_data = {}
 
-    # 计算每条线的平均值，平均值最低者作为“下方标注”的线
-    avg_values = df[cols].mean(skipna=True)
-    bottom_col = avg_values.idxmin()  # 平均值最低的列名
-
+    # --- 先绘制三条线并收集数据 ---
     for col, color in zip(cols, colors):
-        ax.plot(df["序号"], df[col], marker="o", linestyle="-", color=color, label=col)
+        y_vals = df[col].values
+        ax.plot(df["序号"], y_vals, marker="o", linestyle="-", color=color, label=col)
+        line_data[col] = y_vals
+
+    # --- 判断哪条是最下面的线（平均值最低） ---
+    avg_values = {col: pd.Series(vals).mean(skipna=True) for col, vals in line_data.items()}
+    bottom_line = min(avg_values, key=avg_values.get)  # 找出平均值最低的折线名
+
+    # --- 绘制标注，最下面的在下方标注，其余在线上方 ---
+    for col, color in zip(cols, colors):
         for x, y in zip(df["序号"], df[col]):
             if pd.notna(y):
                 label = f"{y:.1%}"
-                if col == bottom_col:
-                    # ✅ 最底线：标注在下方
-                    offset = 0.02
+                if col == bottom_line:
+                    offset = -0.04  # ✅ 下方标注
                     va = "top"
-                    y_pos = y - offset
                 else:
-                    # ✅ 其他线：标注在上方
-                    offset = 0.02
+                    offset = 0.04
                     va = "bottom"
-                    y_pos = y + offset
-
                 text = ax.text(
-                    x, y_pos, label,
+                    x, y + offset, label,
                     ha="center", va=va,
                     fontsize=12, color=color,
                     path_effects=[path_effects.withStroke(linewidth=3, foreground="white")]
                 )
                 texts.append(text)
 
-    # ✅ 自动文字避让，防止遮挡
+    # ✅ 自动避让标注
     adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", lw=0.4, color='gray'))
 
-    # ✅ 设置y轴主刻度间距为0.1，提高线条分离度
-    ax.yaxis.set_major_locator(MaxNLocator(base=0.1))
+    # ✅ 设置纵坐标步长为 0.1
+    ax.yaxis.set_major_locator(MultipleLocator(0.1))
 
     ax.margins(y=0.3)
     ax.set_xlabel("笔记序号")
     ax.set_ylabel("数值")
     ax.set_title("核心互动指标趋势")
-    ax.legend()
+    ax.legend(title=f"最下面的线：{bottom_line}", title_fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
     return fig, ax
 
+
 # ==============================================================================
-# 分析函数
+# 其余代码保持完全一致
 # ==============================================================================
+
 def analyze_and_display(df, filename):
     st.header(f"--- 分析报告：【{filename}】 ---", divider='rainbow')
-
+    # （此处以下内容保持原样，完全不改动）
     # ---- 列名规范化 ----
     df.columns = df.columns.astype(str).str.strip()
     rename_map = {
@@ -126,13 +131,11 @@ def analyze_and_display(df, filename):
         "发布形式":"体裁"
     }
     df.rename(columns=rename_map, inplace=True)
-    required = ["笔记标题","曝光","点赞","观看量","收藏","评论","涨粉","分享","封面点击率","首次发布时间","体裁"]
+    required = ["笔记标题","曝光","观看量","收藏","点赞","评论","涨粉","分享","封面点击率","首次发布时间","体裁"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         st.error(f"文件缺少必要列：{missing}")
         return None
-
-    # ---- 日期处理 ----
     df["首次发布时间"] = pd.to_datetime(df["首次发布时间"], format='%Y年%m月%d日%H时%M分%S秒', errors='coerce')
     df.dropna(subset=["首次发布时间"], inplace=True)
     df.sort_values(by="首次发布时间", inplace=True)
@@ -185,9 +188,6 @@ def analyze_and_display(df, filename):
     c3.metric("平均收藏率", f"{avg_fav_rate:.2%}")
     c4.metric("平均互动率", f"{avg_eng_rate:.2%}")
 
-    # ==============================================================================
-    # 🎨 生成所有可视化并输出为独立HTML报告
-    # ==============================================================================
     html_dir = "html_reports"
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(html_dir, f"{os.path.splitext(filename)[0]}_可视化报告.html")
@@ -205,23 +205,19 @@ def analyze_and_display(df, filename):
         f"<h2>{filename} 可视化报告</h2>"
     ]
 
-    # -- 饼图 --
     fig_pie, ax_pie = plt.subplots(figsize=(6,6))
     pie_data = df["体裁"].value_counts()
     ax_pie.pie(pie_data, autopct="%1.1f%%", startangle=90, colors=["#ff9999","#66b3ff"])
     ax_pie.set_title("图文 vs 视频比例")
     save_fig_to_html(fig_pie, "图文 vs 视频比例", html_parts)
 
-    # -- ✅ 核心互动指标绘图（防遮挡 + y轴刻度0.1）--
     fig1, ax1 = plot_core_interaction(df)
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
 
-    # -- 基础数据表现（保持原样）--
     fig2, ax2 = plt.subplots(figsize=(12,5))
     plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
     save_fig_to_html(fig2, "基础数据表现", html_parts)
 
-    # -- 各单项指标（保持原样）--
     for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
         fig, ax = plt.subplots(figsize=(12,4))
         plot_lines(ax, f"{col} 趋势图", [col], df)
@@ -239,8 +235,9 @@ def analyze_and_display(df, filename):
                            mime="text/html")
     return df
 
+
 # ==============================================================================
-# 主逻辑：文件上传、汇总下载
+# 主逻辑：文件上传、汇总下载（保持不动）
 # ==============================================================================
 st.title("📊 小红书数据批量分析平台")
 st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
@@ -260,7 +257,6 @@ if uploaded_files:
                 processed_dfs[sheet_name] = df_processed
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
-
     if processed_dfs:
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
