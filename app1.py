@@ -59,9 +59,8 @@ def plot_lines(ax, title, cols, df):
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.6)
 
-
 # ==============================================================================
-# ✅ 新增函数：核心互动指标趋势防遮挡版
+# ✅ 改进版：核心互动指标趋势（智能防遮挡 + y轴刻度间隔0.1）
 # ==============================================================================
 def plot_core_interaction(df):
     fig, ax = plt.subplots(figsize=(12, 5))
@@ -69,23 +68,39 @@ def plot_core_interaction(df):
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     texts = []
 
+    # 计算每条线的平均值，平均值最低者作为“下方标注”的线
+    avg_values = df[cols].mean(skipna=True)
+    bottom_col = avg_values.idxmin()  # 平均值最低的列名
+
     for col, color in zip(cols, colors):
         ax.plot(df["序号"], df[col], marker="o", linestyle="-", color=color, label=col)
         for x, y in zip(df["序号"], df[col]):
             if pd.notna(y):
                 label = f"{y:.1%}"
-                # 按不同线条错层偏移，减少初始重叠
-                offset = 0.03 + 0.04 * cols.index(col)
+                if col == bottom_col:
+                    # ✅ 最底线：标注在下方
+                    offset = 0.02
+                    va = "top"
+                    y_pos = y - offset
+                else:
+                    # ✅ 其他线：标注在上方
+                    offset = 0.02
+                    va = "bottom"
+                    y_pos = y + offset
+
                 text = ax.text(
-                    x, y + offset, label,
-                    ha="center", va="bottom",
+                    x, y_pos, label,
+                    ha="center", va=va,
                     fontsize=12, color=color,
                     path_effects=[path_effects.withStroke(linewidth=3, foreground="white")]
                 )
                 texts.append(text)
 
-    # ✅ 自动避让标注
+    # ✅ 自动文字避让，防止遮挡
     adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", lw=0.4, color='gray'))
+
+    # ✅ 设置y轴主刻度间距为0.1，提高线条分离度
+    ax.yaxis.set_major_locator(MaxNLocator(base=0.1))
 
     ax.margins(y=0.3)
     ax.set_xlabel("笔记序号")
@@ -95,7 +110,6 @@ def plot_core_interaction(df):
     ax.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
     return fig, ax
-
 
 # ==============================================================================
 # 分析函数
@@ -198,7 +212,7 @@ def analyze_and_display(df, filename):
     ax_pie.set_title("图文 vs 视频比例")
     save_fig_to_html(fig_pie, "图文 vs 视频比例", html_parts)
 
-    # -- ✅ 核心互动指标防遮挡绘图 --
+    # -- ✅ 核心互动指标绘图（防遮挡 + y轴刻度0.1）--
     fig1, ax1 = plot_core_interaction(df)
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
 
@@ -224,7 +238,6 @@ def analyze_and_display(df, filename):
                            file_name=os.path.basename(html_path),
                            mime="text/html")
     return df
-
 
 # ==============================================================================
 # 主逻辑：文件上传、汇总下载
