@@ -86,10 +86,10 @@ def plot_core_interaction(df):
             if pd.notna(y):
                 label = f"{y:.1%}"
                 if col == bottom_line:
-                    offset = -0.04  # ✅ 下方标注
+                    offset = -0.06  # ✅ 下方标注
                     va = "top"
                 else:
-                    offset = 0.08
+                    offset = 0.04
                     va = "bottom"
                 text = ax.text(
                     x, y + offset, label,
@@ -271,5 +271,6 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
+
 
 
