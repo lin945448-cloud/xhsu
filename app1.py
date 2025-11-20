@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import matplotlib.font_manager as fm
 import io, os, base64
+# ======================== 修改点 1：新增库引用 ========================
+# 引入 adjust_text 库来自动处理文本标签重叠问题
+# 请确保已安装此库: pip install adjustText
+from adjust_text import adjust_text
+# ======================== 修改结束 ========================
 
 # ==============================================================================
 # 初始化页面
@@ -25,14 +30,26 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图
+# 基础绘图函数：带标注的线图 (已修改)
 # ==============================================================================
+# ======================== 修改点 2：重写 plot_lines 函数 ========================
 def plot_lines(ax, title, cols, df):
-    """通用绘线函数，用于保存为HTML时复用"""
+    """通用绘线函数，用于保存为HTML时复用。
+    修改后：
+    1. 增大标注字体。
+    2. 使用 adjust_text 自动防止标签重叠，并为远离的标签添加延长线。
+    """
+    texts = []
+    lines_for_avoidance = []
+
     for col in cols:
-        ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
+        # 绘制线图并获取线对象，用于后续避让
+        line, = ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
+        lines_for_avoidance.append(line)
+
         for x, y in zip(df["序号"], df[col]):
             if pd.notna(y):
+                # 格式化标签文本
                 if col in ["赞藏比", "有效活跃度"]:
                     label = f"{y:.2f}"
                 elif '率' in col:
@@ -41,8 +58,18 @@ def plot_lines(ax, title, cols, df):
                     label = f"{y:.2f}"
                 else:
                     label = f"{int(y)}"
-                offset = abs(y) * 0.1 if y != 0 else 0.05
-                ax.text(x, y + offset, label, ha="center", va="bottom", fontsize=8, color='grey')
+                
+                # 创建文本对象并添加到列表中，字体增大为10
+                texts.append(ax.text(x, y, label, ha="center", va="bottom", fontsize=10, color='grey'))
+
+    # 使用 adjust_text 自动调整所有文本位置
+    # arrowprops 会在文本被移动较远时添加延长线
+    # add_objects 确保文本不会与线图重叠
+    adjust_text(texts,
+                ax=ax,
+                add_objects=lines_for_avoidance,
+                arrowprops=dict(arrowstyle='-', color='gray', lw=0.5))
+
     ax.margins(y=0.4)
     ax.set_xlabel("笔记序号")
     ax.set_ylabel("数值")
@@ -50,9 +77,10 @@ def plot_lines(ax, title, cols, df):
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.6)
+# ======================== 修改结束 ========================
 
 # ==============================================================================
-# 分析函数
+# 分析函数 (未修改)
 # ==============================================================================
 def analyze_and_display(df, filename):
     st.header(f"--- 分析报告：【{filename}】 ---", divider='rainbow')
@@ -182,7 +210,7 @@ def analyze_and_display(df, filename):
     return df
 
 # ==============================================================================
-# 主逻辑：文件上传、汇总下载
+# 主逻辑：文件上传、汇总下载 (未修改)
 # ==============================================================================
 st.title("📊 小红书数据批量分析平台")
 st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
