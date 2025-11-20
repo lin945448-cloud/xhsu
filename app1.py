@@ -155,7 +155,7 @@ def analyze_and_display(df, filename):
     df["转粉率"] = df["涨粉"] / df["观看量"].replace(0, pd.NA)
 
     # ---- 表格展示 ----
-    st.subheader("📄 完整数据表")
+    st.subheader("分析后的数据表")
     show_cols = [
         "序号","笔记标题","首次发布时间","体裁","曝光","观看量","封面点击率",
         "点赞","评论","收藏","涨粉","分享",
@@ -239,10 +239,10 @@ def analyze_and_display(df, filename):
 # ==============================================================================
 # 主逻辑：文件上传、汇总下载（保持不动）
 # ==============================================================================
-st.title("📊 小红书数据批量分析平台")
+st.title("📊 小红书后台批量分析平台")
 st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
 
-uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件",
+uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件，多个文件请分析完一个，再上传下一个",
     type=["xls","xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
@@ -271,6 +271,7 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
+
 
 
 
