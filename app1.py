@@ -214,9 +214,9 @@ def analyze_and_display(df, filename):
     fig1, ax1 = plot_core_interaction(df)
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
 
-    fig2, ax2 = plt.subplots(figsize=(12,5))
-    plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
-    save_fig_to_html(fig2, "基础数据表现", html_parts)
+    # fig2, ax2 = plt.subplots(figsize=(12,5))
+    # plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
+    # save_fig_to_html(fig2, "基础数据表现", html_parts)
 
     for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
         fig, ax = plt.subplots(figsize=(12,4))
@@ -271,6 +271,7 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
+
 
 
 
