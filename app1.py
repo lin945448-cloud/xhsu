@@ -240,9 +240,9 @@ def analyze_and_display(df, filename):
 # 主逻辑：文件上传、汇总下载（保持不动）
 # ==============================================================================
 st.title("📊 小红书后台批量分析平台")
-st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
+st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。注：多个文件请分析完一个再上传下一个")
 
-uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件，多个文件请分析完一个，再上传下一个",
+uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件",
     type=["xls","xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
@@ -270,7 +270,8 @@ if uploaded_files:
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         st.balloons()
 else:
-    st.info("👆 请上传Excel文件以开始分析。")
+    st.info("👆 请上传Excel文件开始分析。")
+
 
 
 
