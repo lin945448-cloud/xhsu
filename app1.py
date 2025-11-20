@@ -3,7 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import matplotlib.font_manager as fm
-import matplotlib.patheffects as path_effects  # ✅ 修改2：增加描边效果的导入
+import matplotlib.patheffects as path_effects  # ✅ 描边导入
+from adjustText import adjust_text  # ✅ 用于防止标注文字遮挡
 import io, os, base64
 
 # ==============================================================================
@@ -26,7 +27,7 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图
+# 基础绘图函数：带标注的线图（保持不动）
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
@@ -43,7 +44,6 @@ def plot_lines(ax, title, cols, df):
                 else:
                     label = f"{int(y)}"
                 offset = abs(y) * 0.1 if y != 0 else 0.05
-                # ✅ 修改1：让字体大、文字有白色描边，不被线挡住
                 ax.text(
                     x, y + offset, label,
                     ha="center", va="bottom",
@@ -58,6 +58,44 @@ def plot_lines(ax, title, cols, df):
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.6)
+
+
+# ==============================================================================
+# ✅ 新增函数：核心互动指标趋势防遮挡版
+# ==============================================================================
+def plot_core_interaction(df):
+    fig, ax = plt.subplots(figsize=(12, 5))
+    cols = ["点赞率", "收藏率", "互动率"]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    texts = []
+
+    for col, color in zip(cols, colors):
+        ax.plot(df["序号"], df[col], marker="o", linestyle="-", color=color, label=col)
+        for x, y in zip(df["序号"], df[col]):
+            if pd.notna(y):
+                label = f"{y:.1%}"
+                # 按不同线条错层偏移，减少初始重叠
+                offset = 0.03 + 0.04 * cols.index(col)
+                text = ax.text(
+                    x, y + offset, label,
+                    ha="center", va="bottom",
+                    fontsize=12, color=color,
+                    path_effects=[path_effects.withStroke(linewidth=3, foreground="white")]
+                )
+                texts.append(text)
+
+    # ✅ 自动避让标注
+    adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", lw=0.4, color='gray'))
+
+    ax.margins(y=0.3)
+    ax.set_xlabel("笔记序号")
+    ax.set_ylabel("数值")
+    ax.set_title("核心互动指标趋势")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    return fig, ax
+
 
 # ==============================================================================
 # 分析函数
@@ -160,16 +198,16 @@ def analyze_and_display(df, filename):
     ax_pie.set_title("图文 vs 视频比例")
     save_fig_to_html(fig_pie, "图文 vs 视频比例", html_parts)
 
-    # -- 核心互动 & 基础表现 --
-    fig1, ax1 = plt.subplots(figsize=(12,5))
-    plot_lines(ax1, "核心互动指标趋势", ["点赞率","收藏率","互动率"], df)
+    # -- ✅ 核心互动指标防遮挡绘图 --
+    fig1, ax1 = plot_core_interaction(df)
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
 
+    # -- 基础数据表现（保持原样）--
     fig2, ax2 = plt.subplots(figsize=(12,5))
     plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
     save_fig_to_html(fig2, "基础数据表现", html_parts)
 
-    # -- 各单项指标 --
+    # -- 各单项指标（保持原样）--
     for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
         fig, ax = plt.subplots(figsize=(12,4))
         plot_lines(ax, f"{col} 趋势图", [col], df)
@@ -186,6 +224,7 @@ def analyze_and_display(df, filename):
                            file_name=os.path.basename(html_path),
                            mime="text/html")
     return df
+
 
 # ==============================================================================
 # 主逻辑：文件上传、汇总下载
