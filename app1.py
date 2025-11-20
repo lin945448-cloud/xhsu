@@ -64,7 +64,7 @@ def plot_lines(ax, title, cols, df):
 # ✅ 修改后的核心互动指标趋势函数
 # ==============================================================================
 def plot_core_interaction(df):
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(12, 9))
     cols = ["点赞率", "收藏率", "互动率"]
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     texts = []
@@ -271,3 +271,4 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件以开始分析。")
+
