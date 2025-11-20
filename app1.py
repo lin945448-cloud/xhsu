@@ -25,11 +25,10 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图   ←★ 已修改
+# 基础绘图函数：带标注的线图
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
-    all_text_boxes = []  # 用于核心互动指标趋势防止数字重叠（储存标注框位置）
     for col in cols:
         ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
         for x, y in zip(df["序号"], df[col]):
@@ -38,49 +37,12 @@ def plot_lines(ax, title, cols, df):
                     label = f"{y:.2f}"
                 elif '率' in col:
                     label = f"{y:.1%}"
-                elif 0 < y < 1:
+                elif y < 1 and y > 0:
                     label = f"{y:.2f}"
                 else:
                     label = f"{int(y)}"
-
-                # ----------- 新增智能偏移与防遮挡逻辑 -----------------
                 offset = abs(y) * 0.1 if y != 0 else 0.05
-                text_y = y + offset
-                arrow_this = False
-
-                # 检测前后点变化率较大（折线弯曲）则增加延长线
-                idx = df.index[df["序号"] == x][0]
-                if idx > 0 and idx < len(df) - 1:
-                    dy1 = df[col].iloc[idx] - df[col].iloc[idx - 1]
-                    dy2 = df[col].iloc[idx + 1] - df[col].iloc[idx]
-                    if abs(dy1 - dy2) > abs(y) * 0.2:
-                        arrow_this = True  # 折线较曲折，使用延长线
-
-                # 核心互动图避免文字重叠：检测现有标注间垂直距离
-                if title == "核心互动指标趋势" and all_text_boxes:
-                    for bx in all_text_boxes:
-                        if abs(text_y - bx) < offset * 2:
-                            text_y += offset * 1.5  # 向上稍微挪开
-
-                # 使用 annotate 进行标注，针对挡住的点加箭头延长线
-                if arrow_this:
-                    ax.annotate(label,
-                                xy=(x, y), xytext=(x, text_y),
-                                textcoords="data",
-                                ha="center", va="bottom",
-                                fontsize=12, color='grey',
-                                arrowprops=dict(arrowstyle='-', color='grey', lw=0.6))
-                else:
-                    ax.annotate(label,
-                                xy=(x, y), xytext=(x, text_y),
-                                textcoords="data",
-                                ha="center", va="bottom",
-                                fontsize=12, color='grey')
-
-                if title == "核心互动指标趋势":
-                    all_text_boxes.append(text_y)
-    # -------------------------------------------------------------
-
+                ax.text(x, y + offset, label, ha="center", va="bottom", fontsize=8, color='grey')
     ax.margins(y=0.4)
     ax.set_xlabel("笔记序号")
     ax.set_ylabel("数值")
@@ -130,7 +92,7 @@ def analyze_and_display(df, filename):
     df["转粉率"] = df["涨粉"] / df["观看量"].replace(0, pd.NA)
 
     # ---- 表格展示 ----
-    st.subheader("分析后的数据表")
+    st.subheader("📄 完整数据表")
     show_cols = [
         "序号","笔记标题","首次发布时间","体裁","曝光","观看量","封面点击率",
         "点赞","评论","收藏","涨粉","分享",
@@ -144,17 +106,19 @@ def analyze_and_display(df, filename):
 
     # ---- 平均指标 ----
     st.subheader("📈 核心指标平均值")
+    # 加权/总量法：用总量求转化率
     total_views = df["观看量"].sum()
     total_expo = df["曝光"].sum()
     total_likes = df["点赞"].sum()
     total_favs = df["收藏"].sum()
     total_comments = df["评论"].sum()
     total_follows = df["涨粉"].sum()
+
     avg_ctr = ((df["封面点击率"] * df["曝光"]).sum() / total_expo) if total_expo else float("nan")
     avg_like_rate = (total_likes / total_views) if total_views else float("nan")
     avg_fav_rate = (total_favs / total_views) if total_views else float("nan")
     avg_eng_rate = ((total_likes + total_comments + total_favs) / total_views) if total_views else float("nan")
-    avg_follow_rate = (total_follows / total_views) if total_views else float("nan")
+    avg_follow_rate = (total_follows / total_views) if total_views else float("nan")  # 未展示，但保持一致性计算
 
     c1,c2,c3,c4 = st.columns(4)
     c1.metric("平均封面点击率", f"{avg_ctr:.2%}")
@@ -220,15 +184,16 @@ def analyze_and_display(df, filename):
 # ==============================================================================
 # 主逻辑：文件上传、汇总下载
 # ==============================================================================
-st.title("📊 小红书笔记数据批量分析平台")
+st.title("📊 小红书数据批量分析平台")
 st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
 
-uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件，多个文件请分析完一个再上传下一个",
+uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件",
     type=["xls","xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    placeholder_top = st.empty()
+    placeholder_top = st.empty()  # 顶部留位放下载汇总按钮
     processed_dfs = {}
+
     for up_file in uploaded_files:
         try:
             df_raw = pd.read_excel(up_file, header=1)
@@ -239,6 +204,7 @@ if uploaded_files:
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
 
+    # 汇总Excel按钮在顶部
     if processed_dfs:
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
