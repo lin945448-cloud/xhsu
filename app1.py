@@ -3,8 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import matplotlib.font_manager as fm
-import matplotlib.patheffects as path_effects  # ✅ 修改2：增加描边效果的导入
 import io, os, base64
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# 【修改点1】: 导入 adjustText 库，需要先通过 pip install adjusttext 安装
+from adjustText import adjust_text
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 # ==============================================================================
 # 初始化页面
@@ -26,7 +29,7 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图
+# 基础绘图函数：带标注的线图 (这个函数保持不变，用于单线图)
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
@@ -43,13 +46,42 @@ def plot_lines(ax, title, cols, df):
                 else:
                     label = f"{int(y)}"
                 offset = abs(y) * 0.1 if y != 0 else 0.05
-                # ✅ 修改1：让字体大、文字有白色描边，不被线挡住
-                ax.text(
-                    x, y + offset, label,
-                    ha="center", va="bottom",
-                    fontsize=12, color='black',
-                    path_effects=[path_effects.withStroke(linewidth=3, foreground="white")]
-                )
+                # 使用上一次修改后的版本
+                ax.text(x, y + offset, label, ha="center", va="bottom", fontsize=10, color='grey',
+                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.2'))
+    ax.margins(y=0.4)
+    ax.set_xlabel("笔记序号")
+    ax.set_ylabel("数值")
+    ax.set_title(title)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.6)
+
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# 【修改点2】: 新增一个专用于多线条、防止标签重叠的绘图函数
+# ==============================================================================
+def plot_multi_lines_adjusted(ax, title, cols, df):
+    """专门为多线条图表设计的函数，使用adjustText防止标签重叠"""
+    texts = []
+    for col in cols:
+        line, = ax.plot(df["序号"], df[col], marker="o", linestyle="-", label=col)
+        for x, y in zip(df["序号"], df[col]):
+            if pd.notna(y):
+                if col in ["赞藏比", "有效活跃度"]:
+                    label = f"{y:.2f}"
+                elif '率' in col:
+                    label = f"{y:.1%}"
+                elif y < 1 and y > 0:
+                    label = f"{y:.2f}"
+                else:
+                    label = f"{int(y)}"
+                # 创建文本对象并添加到列表中，而不是立即绘制
+                texts.append(ax.text(x, y, label, ha="center", va="bottom", fontsize=10, color=line.get_color()))
+
+    # 使用adjust_text自动调整所有标签位置
+    adjust_text(texts, ax=ax,
+                arrowprops=dict(arrowstyle='-', color='grey', lw=0.5),
+                expand_points=(1.2, 1.2), expand_text=(1.2, 1.2))
 
     ax.margins(y=0.4)
     ax.set_xlabel("笔记序号")
@@ -58,6 +90,8 @@ def plot_lines(ax, title, cols, df):
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.6)
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 
 # ==============================================================================
 # 分析函数
@@ -114,6 +148,7 @@ def analyze_and_display(df, filename):
 
     # ---- 平均指标 ----
     st.subheader("📈 核心指标平均值")
+    # 加权/总量法：用总量求转化率
     total_views = df["观看量"].sum()
     total_expo = df["曝光"].sum()
     total_likes = df["点赞"].sum()
@@ -125,7 +160,7 @@ def analyze_and_display(df, filename):
     avg_like_rate = (total_likes / total_views) if total_views else float("nan")
     avg_fav_rate = (total_favs / total_views) if total_views else float("nan")
     avg_eng_rate = ((total_likes + total_comments + total_favs) / total_views) if total_views else float("nan")
-    avg_follow_rate = (total_follows / total_views) if total_views else float("nan")
+    avg_follow_rate = (total_follows / total_views) if total_views else float("nan")  # 未展示，但保持一致性计算
 
     c1,c2,c3,c4 = st.columns(4)
     c1.metric("平均封面点击率", f"{avg_ctr:.2%}")
@@ -160,25 +195,29 @@ def analyze_and_display(df, filename):
     ax_pie.set_title("图文 vs 视频比例")
     save_fig_to_html(fig_pie, "图文 vs 视频比例", html_parts)
 
+    # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+    # 【修改点3】: 调用新的专用函数来绘制“核心互动指标趋势”图
     # -- 核心互动 & 基础表现 --
     fig1, ax1 = plt.subplots(figsize=(12,5))
-    plot_lines(ax1, "核心互动指标趋势", ["点赞率","收藏率","互动率"], df)
+    plot_multi_lines_adjusted(ax1, "核心互动指标趋势", ["点赞率","收藏率","互动率"], df) # <-- 使用了新函数
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     fig2, ax2 = plt.subplots(figsize=(12,5))
-    plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
+    plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df) # <-- 其他图表保持不变
     save_fig_to_html(fig2, "基础数据表现", html_parts)
 
     # -- 各单项指标 --
     for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
         fig, ax = plt.subplots(figsize=(12,4))
-        plot_lines(ax, f"{col} 趋势图", [col], df)
+        plot_lines(ax, f"{col} 趋势图", [col], df) # <-- 其他图表保持不变
         save_fig_to_html(fig, f"{col} 趋势图", html_parts)
 
     html_parts.append("</body></html>")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write("\n".join(html_parts))
 
+    # ---- 下载HTML报告按钮 ----
     st.success(f"✅ 已生成可视化报告文件：{os.path.basename(html_path)}")
     with open(html_path, "rb") as f:
         st.download_button("下载该文件的可视化HTML报告",
@@ -197,8 +236,9 @@ uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文�
     type=["xls","xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    placeholder_top = st.empty()
+    placeholder_top = st.empty()  # 顶部留位放下载汇总按钮
     processed_dfs = {}
+
     for up_file in uploaded_files:
         try:
             df_raw = pd.read_excel(up_file, header=1)
@@ -209,6 +249,7 @@ if uploaded_files:
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
 
+    # 汇总Excel按钮在顶部
     if processed_dfs:
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
