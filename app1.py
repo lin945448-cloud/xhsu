@@ -27,7 +27,7 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图
+# 基础绘图函数：带标注的线图（保持不动）
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
@@ -243,26 +243,28 @@ uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文�
 if uploaded_files:
     placeholder_top = st.empty()
     processed_dfs = {}
-    all_data_list = []  # ✅ 用于存储所有处理过的数据，用于汇总 Sheet
+    all_data_list = []  # ✅ 1. 用于存储所有表格数据，供最后大汇总使用
 
     for up_file in uploaded_files:
         try:
             df_raw = pd.read_excel(up_file, header=1)
+            # 分析并显示（返回的 df 尚未添加账号名，保持原逻辑不变）
             df_processed = analyze_and_display(df_raw, up_file.name)
+            
             if df_processed is not None:
-                # 1. 存储单个Sheet用的数据
-                sheet_name = ''.join(e for e in up_file.name if e.isalnum())[:31]
-                processed_dfs[sheet_name] = df_processed
-
-                # 2. ✅ 准备汇总Sheet用的数据
-                # 复制一份，避免影响原数据
-                df_for_summary = df_processed.copy()
-                # 获取账号名（这里使用不带后缀的文件名）
+                # 获取账号名（去除后缀）
                 account_name = os.path.splitext(up_file.name)[0]
-                # 在第一列插入“账号”
-                df_for_summary.insert(0, "账号", account_name)
-                # 添加到列表
-                all_data_list.append(df_for_summary)
+                
+                # ✅ 2. 创建用于导出的副本，并在第一列插入“账号名”
+                df_export = df_processed.copy()
+                df_export.insert(0, "账号名", account_name)
+                
+                # 存储用于单独Sheet的数据
+                sheet_name = ''.join(e for e in up_file.name if e.isalnum())[:31]
+                processed_dfs[sheet_name] = df_export
+                
+                # 存储用于汇总Sheet的数据
+                all_data_list.append(df_export)
 
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
@@ -270,15 +272,16 @@ if uploaded_files:
     if processed_dfs:
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-            # ✅ 先写入汇总 Sheet
-            if all_data_list:
-                df_all = pd.concat(all_data_list, ignore_index=True)
-                df_all.to_excel(writer, sheet_name="所有数据汇总", index=False)
-
-            # 再写入各个独立的 Sheet
+            
+            # ✅ 3. 先写入各个独立的Sheet（每个Sheet第一列都有账号名）
             for name, d in processed_dfs.items():
                 d.to_excel(writer, sheet_name=name, index=False)
-                
+            
+            # ✅ 4. 最后写入汇总的大Sheet（包含所有数据，无空行，第一列为账号名）
+            if all_data_list:
+                df_summary = pd.concat(all_data_list, ignore_index=True)
+                df_summary.to_excel(writer, sheet_name="所有数据汇总", index=False)
+
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
             st.download_button("⬇️ 下载汇总Excel报告",
