@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, MultipleLocator  # ✅ 加入MultipleLocator
+from matplotlib.ticker import MaxNLocator, MultipleLocator
 import matplotlib.font_manager as fm
-import matplotlib.patheffects as path_effects  # ✅ 描边导入
-from adjustText import adjust_text  # ✅ 用于防止标注文字遮挡
+import matplotlib.patheffects as path_effects
+from adjustText import adjust_text
 import io, os, base64
 
 # ==============================================================================
@@ -27,7 +27,7 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图（保持不动）
+# 基础绘图函数：带标注的线图
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
@@ -61,7 +61,7 @@ def plot_lines(ax, title, cols, df):
 
 
 # ==============================================================================
-# ✅ 修改后的核心互动指标趋势函数
+# 核心互动指标趋势函数
 # ==============================================================================
 def plot_core_interaction(df):
     fig, ax = plt.subplots(figsize=(12, 12))
@@ -86,7 +86,7 @@ def plot_core_interaction(df):
             if pd.notna(y):
                 label = f"{y:.1%}"
                 if col == bottom_line:
-                    offset = -0.06  # ✅ 下方标注
+                    offset = -0.06  # 下方标注
                     va = "top"
                 else:
                     offset = 0.04
@@ -99,10 +99,10 @@ def plot_core_interaction(df):
                 )
                 texts.append(text)
 
-    # ✅ 自动避让标注
+    # 自动避让标注
     adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", lw=0.4, color='gray'))
 
-    # ✅ 设置纵坐标步长为 0.1
+    # 设置纵坐标步长为 0.1
     ax.yaxis.set_major_locator(MultipleLocator(0.1))
 
     ax.margins(y=0.3)
@@ -116,12 +116,11 @@ def plot_core_interaction(df):
 
 
 # ==============================================================================
-# 其余代码保持完全一致
+# 分析与显示逻辑
 # ==============================================================================
-
 def analyze_and_display(df, filename):
     st.header(f"--- 分析报告：【{filename}】 ---", divider='rainbow')
-    # （此处以下内容保持原样，完全不改动）
+    
     # ---- 列名规范化 ----
     df.columns = df.columns.astype(str).str.strip()
     rename_map = {
@@ -214,10 +213,6 @@ def analyze_and_display(df, filename):
     fig1, ax1 = plot_core_interaction(df)
     save_fig_to_html(fig1, "核心互动指标趋势", html_parts)
 
-    # fig2, ax2 = plt.subplots(figsize=(12,5))
-    # plot_lines(ax2, "基础数据表现", ["曝光","观看量","点赞","收藏","分享"], df)
-    # save_fig_to_html(fig2, "基础数据表现", html_parts)
-
     for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
         fig, ax = plt.subplots(figsize=(12,4))
         plot_lines(ax, f"{col} 趋势图", [col], df)
@@ -237,7 +232,7 @@ def analyze_and_display(df, filename):
 
 
 # ==============================================================================
-# 主逻辑：文件上传、汇总下载（保持不动）
+# 主逻辑：文件上传、汇总下载
 # ==============================================================================
 st.title("📊 小红书数据分析平台")
 st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。注：1.该平台只针对小红书后台导出的数据。2.多个文件请分析完一个再上传下一个")
@@ -248,20 +243,42 @@ uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文�
 if uploaded_files:
     placeholder_top = st.empty()
     processed_dfs = {}
+    all_data_list = []  # ✅ 用于存储所有处理过的数据，用于汇总 Sheet
+
     for up_file in uploaded_files:
         try:
             df_raw = pd.read_excel(up_file, header=1)
             df_processed = analyze_and_display(df_raw, up_file.name)
             if df_processed is not None:
+                # 1. 存储单个Sheet用的数据
                 sheet_name = ''.join(e for e in up_file.name if e.isalnum())[:31]
                 processed_dfs[sheet_name] = df_processed
+
+                # 2. ✅ 准备汇总Sheet用的数据
+                # 复制一份，避免影响原数据
+                df_for_summary = df_processed.copy()
+                # 获取账号名（这里使用不带后缀的文件名）
+                account_name = os.path.splitext(up_file.name)[0]
+                # 在第一列插入“账号”
+                df_for_summary.insert(0, "账号", account_name)
+                # 添加到列表
+                all_data_list.append(df_for_summary)
+
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
+
     if processed_dfs:
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            # ✅ 先写入汇总 Sheet
+            if all_data_list:
+                df_all = pd.concat(all_data_list, ignore_index=True)
+                df_all.to_excel(writer, sheet_name="所有数据汇总", index=False)
+
+            # 再写入各个独立的 Sheet
             for name, d in processed_dfs.items():
                 d.to_excel(writer, sheet_name=name, index=False)
+                
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
             st.download_button("⬇️ 下载汇总Excel报告",
@@ -271,10 +288,3 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
-
-
-
-
-
-
-
