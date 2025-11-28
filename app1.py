@@ -373,11 +373,11 @@ if uploaded_files:
                 st.warning("请至少选择一个账号查看趋势图。")
 
             # ------------------------------------------------------------------
-            # C. 🔥🔥 核心指标详细透视 (数值 + 环比) 🔥🔥
+            # C. 🔥🔥 核心指标详细透视 (数值在前 + 环比在后) 🔥🔥
             # ------------------------------------------------------------------
             st.markdown("---")
-            st.subheader("📅 核心指标详细透视表 (数值 + 环比)")
-            st.info("📊 此表格展示了每个月的数据以及对应的环比变化，列顺序为：[10月数值] -> [10月环比] -> [11月数值] -> [11月环比]...")
+            st.subheader("📅 核心指标详细透视表 (数值在前，环比在后)")
+            st.info("📊 排序方式：[10月数值] | [11月数值] ... [10月环比] | [11月环比] ...")
 
             # 配置映射：指标名称 -> (数值列名, 环比列名, 数值格式化字符串)
             metric_configs = {
@@ -397,28 +397,26 @@ if uploaded_files:
                 # 2. 获取所有月份并排序
                 sorted_months = sorted(df_trend['年月'].unique())
                 
-                # 3. 构造新的列顺序：[数值, 月1], [环比, 月1], [数值, 月2], [环比, 月2]...
-                new_columns_order = []
-                for m in sorted_months:
-                    new_columns_order.append((cfg['val_col'], m))
-                    new_columns_order.append((cfg['mom_col'], m))
+                # 3. 🔥🔥 关键修改：先放所有数值列，再放所有环比列 🔥🔥
+                val_cols_ordered = [(cfg['val_col'], m) for m in sorted_months]
+                mom_cols_ordered = [(cfg['mom_col'], m) for m in sorted_months]
+                
+                # 拼接：所有月份数值 + 所有月份环比
+                new_columns_order = val_cols_ordered + mom_cols_ordered
                 
                 # 4. 根据新顺序重排 DataFrame 列
-                # 注意：如果某个月只有数值没有环比（如第一个月），pivot会自动填充NaN，逻辑依然成立
                 try:
-                    df_final = pivot_df[new_columns_order]
+                    df_final = pivot_df.reindex(columns=new_columns_order)
                     
                     # 5. 设置样式 (Styler)
-                    # Pandas IndexSlice 用于在 Styler 中选中特定的层级
                     idx = pd.IndexSlice
-                    
                     styler = df_final.style
                     
-                    # 格式化数值列 (Level 0 是 val_col, Level 1 是 任意月份)
-                    styler = styler.format(cfg['fmt'], subset=idx[:, (cfg['val_col'], slice(None))])
+                    # 格式化数值列 (数值为空填充None)
+                    styler = styler.format(cfg['fmt'], na_rep="None", subset=idx[:, (cfg['val_col'], slice(None))])
                     
-                    # 格式化环比列 (带正负号百分比，空值显示-)
-                    styler = styler.format("{:+.1%}", na_rep="-", subset=idx[:, (cfg['mom_col'], slice(None))])
+                    # 格式化环比列 (带正负号百分比，空值填充None)
+                    styler = styler.format("{:+.1%}", na_rep="None", subset=idx[:, (cfg['mom_col'], slice(None))])
                     
                     # 给环比列加背景色 (红绿涨跌)
                     styler = styler.background_gradient(cmap='RdYlGn', vmin=-0.5, vmax=0.5, 
@@ -428,7 +426,7 @@ if uploaded_files:
                     st.dataframe(styler)
                     
                 except KeyError as e:
-                    st.error(f"数据重排时出错，可能是某些月份数据缺失导致。详细错误: {e}")
+                    st.error(f"数据重排时出错。详细错误: {e}")
             else:
                 st.warning("暂无数据可用于生成透视表。")
 
