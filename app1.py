@@ -328,13 +328,14 @@ if uploaded_files:
                             if len(sub_data) < 20:
                                 for x, y in zip(sub_data['年月'], sub_data[metric_name]):
                                     if pd.notna(y):
-                                        ax.text(x, y, f"{y:.1%}", ha='center', va='bottom', fontsize=12, 
+                                        ax.text(x, y, f"{y:.1%}", ha='center', va='bottom', fontsize=14, 
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
 
                     ax.set_title(title_text, fontsize=20)
                     ax.set_xlabel("月份", fontsize=16)
                     ax.set_ylabel("百分比", fontsize=16)
-                    ax.legend(loc='best')
+                    ax.tick_params(axis='both', which='major', labelsize=16)
+                    ax.legend(loc='best',fontsize=14)
                     ax.grid(True, linestyle='--', alpha=0.5)
                     # Y轴显示百分比格式
                     ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
@@ -389,5 +390,6 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
 
