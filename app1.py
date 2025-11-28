@@ -328,7 +328,7 @@ if uploaded_files:
                     for account in selected_accounts:
                         sub_data = df_chart[df_chart['账号名'] == account]
                         if not sub_data.empty:
-                            # 确保绘图数据不含 NA (Matplotlib handle NaN ok, but formatting might need care)
+                            # 确保绘图数据不含 NA
                             x_vals = sub_data['年月']
                             y_vals = sub_data[metric_name]
                             
@@ -375,7 +375,7 @@ if uploaded_files:
                     st.dataframe(df_display.style.format({
                         '涨粉': '{:,.0f}', '互动率': '{:.2%}', '封面点击率': '{:.2%}', '曝光': '{:,.0f}', '观看量': '{:,.0f}',
                         '涨粉环比': '{:+.1%}', '互动率环比': '{:+.1%}', '点击率环比': '{:+.1%}'
-                    }, na_rep="None") 
+                    }, na_rep="--")  # 修正 None 为 --
                     .bar(subset=['涨粉'], color='#d65f5f', vmin=0) 
                     .background_gradient(subset=['互动率'], cmap='Greens')
                     )
@@ -384,7 +384,7 @@ if uploaded_files:
                 st.warning("请至少选择一个账号查看趋势图。")
 
             # ------------------------------------------------------------------
-            # C. 透视表
+            # C. 透视表 (已修改：去除警告、去除颜色、使用 --)
             # ------------------------------------------------------------------
             st.markdown("---")
             st.subheader("📅 核心指标详细透视表 ")
@@ -399,20 +399,38 @@ if uploaded_files:
             cfg = metric_configs[target_key]
 
             if not df_trend.empty:
+                # 创建透视表
                 pivot_df = df_trend.pivot(index='账号名', columns='年月', values=[cfg['val_col'], cfg['mom_col']])
-                sorted_months = sorted(df_trend['年月'].unique())
                 
+                # 确定列顺序：先数值，后环比
+                sorted_months = sorted(df_trend['年月'].unique())
                 val_cols_ordered = [(cfg['val_col'], m) for m in sorted_months]
                 mom_cols_ordered = [(cfg['mom_col'], m) for m in sorted_months]
                 new_columns_order = val_cols_ordered + mom_cols_ordered
                 
                 try:
                     df_final = pivot_df.reindex(columns=new_columns_order)
-                    idx = pd.IndexSlice
-                    styler = df_final.style
-                    styler = styler.format(cfg['fmt'], na_rep="None", subset=idx[:, (cfg['val_col'], slice(None))])
-                    styler = styler.format("{:+.1%}", na_rep="None", subset=idx[:, (cfg['mom_col'], slice(None))])
-                    styler = styler.background_gradient(cmap='RdYlGn', vmin=-0.5, vmax=0.5, subset=idx[:, (cfg['mom_col'], slice(None))])
+                    
+                    # 🔥🔥 修复重点：扁平化多层索引列名，消除 Streamlit 的警告 🔥🔥
+                    new_col_names = []
+                    format_dict = {}
+                    
+                    for col_tuple in df_final.columns:
+                        metric_type, month = col_tuple
+                        if metric_type == cfg['val_col']:
+                            # 如果是数值列，列名直接显示“月份”
+                            new_name = f"{month}"
+                            format_dict[new_name] = cfg['fmt']
+                        else:
+                            # 如果是环比列，列名显示“月份 环比”
+                            new_name = f"{month} 环比"
+                            format_dict[new_name] = "{:+.1%}" # 环比固定显示百分比
+                        new_col_names.append(new_name)
+                    
+                    df_final.columns = new_col_names
+                    
+                    # 应用样式：格式化数值，空值显示为 --，并去除背景色
+                    styler = df_final.style.format(format_dict, na_rep="--")
                     
                     st.write(f"**📊 各账号 {target_key} 月度详细数据表：**")
                     st.dataframe(styler)
@@ -423,7 +441,7 @@ if uploaded_files:
                 st.warning("暂无数据可用于生成透视表。")
 
         # ==============================================================================
-        # Excel 导出逻辑 (移入 if processed_dfs 块内)
+        # Excel 导出逻辑
         # ==============================================================================
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
