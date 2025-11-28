@@ -136,13 +136,13 @@ def analyze_and_display(df, filename):
 
     for c in ["曝光","封面点击率","点赞","观看量","收藏","评论","涨粉","分享"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-    df["点赞率"] = df["点赞"] / df["观看量"].replace(0, pd.NA)
-    df["收藏率"] = df["收藏"] / df["观看量"].replace(0, pd.NA)
-    df["赞藏比"] = df["点赞"] / df["收藏"].replace(0, pd.NA)
-    df["评论率"] = df["评论"] / df["观看量"].replace(0, pd.NA)
-    df["互动率"] = (df["点赞"] + df["评论"] + df["收藏"]) / df["观看量"].replace(0, pd.NA)
-    df["有效活跃度"] = df["评论"] / (df["点赞"] + df["收藏"]).replace(0, pd.NA)
-    df["转粉率"] = df["涨粉"] / df["观看量"].replace(0, pd.NA)
+    df["点赞率"] = df["点赞"] / df["观看量"].replace(0, pd.nan)
+    df["收藏率"] = df["收藏"] / df["观看量"].replace(0, pd.nan)
+    df["赞藏比"] = df["点赞"] / df["收藏"].replace(0, pd.nan)
+    df["评论率"] = df["评论"] / df["观看量"].replace(0, pd.nan)
+    df["互动率"] = (df["点赞"] + df["评论"] + df["收藏"]) / df["观看量"].replace(0, pd.nan)
+    df["有效活跃度"] = df["评论"] / (df["点赞"] + df["收藏"]).replace(0, pd.nan)
+    df["转粉率"] = df["涨粉"] / df["观看量"].replace(0, pd.nan)
 
     st.subheader("分析后的数据表")
     show_cols = [
@@ -154,7 +154,7 @@ def analyze_and_display(df, filename):
         "首次发布时间":"{:%Y-%m-%d %H:%M}",
         "封面点击率":"{:.2%}","点赞率":"{:.2%}","收藏率":"{:.2%}",
         "互动率":"{:.2%}","转粉率":"{:.2%}","赞藏比":"{:.2f}","有效活跃度":"{:.2f}"
-    }))
+    },na_rep="--"))
 
     st.subheader("📈 核心指标平均值")
     total_views = df["观看量"].sum()
@@ -435,4 +435,5 @@ if uploaded_files:
 
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
