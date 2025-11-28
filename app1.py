@@ -263,7 +263,6 @@ if uploaded_files:
             df_all = pd.concat(all_data_list, ignore_index=True)
             
             # 生成 YYYY-MM 格式的年月字符串
-            # 注意：字符串排序 "2023-01" < "2023-02"，所以自然升序即可满足“小月份在前”
             df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
             df_all['估算点击数'] = df_all['封面点击率'] * df_all['曝光']
 
@@ -282,8 +281,8 @@ if uploaded_files:
             df_trend['互动率'] = (df_trend['点赞'] + df_trend['收藏'] + df_trend['评论']) / df_trend['观看量'].replace(0, pd.NA)
             df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, pd.NA)
             
-            # 4. 🔥🔥 核心修改：确保按【时间升序】排序，保证 10月在前，11月在后 🔥🔥
-            # 先按账号分组，再按年月升序（True），这样 pct_change 计算的就是 (本月-上月)/上月
+            # 4. 排序与计算环比
+            # 确保按【账号、年月】升序排列，保证环比计算正确，且小月份在前
             df_trend.sort_values(by=['账号名', '年月'], ascending=[True, True], inplace=True)
             
             # 计算环比 (MoM)
@@ -301,7 +300,7 @@ if uploaded_files:
             if selected_accounts:
                 df_chart = df_trend[df_trend['账号名'].isin(selected_accounts)].copy()
                 
-                # 🔥🔥 再次强制按【年月升序】排序，确保图表X轴是从左到右（小月份->大月份） 🔥🔥
+                # 再次强制按【年月升序】排序，确保图表X轴是从左到右
                 df_chart.sort_values(by='年月', ascending=True, inplace=True)
 
                 def plot_compare_metric(metric_name, title_text, is_percent=True):
@@ -309,7 +308,6 @@ if uploaded_files:
                     for account in selected_accounts:
                         sub_data = df_chart[df_chart['账号名'] == account]
                         if not sub_data.empty:
-                            # 画图
                             ax.plot(sub_data['年月'], sub_data[metric_name], marker='o', linewidth=2, label=account)
                             
                             if len(sub_data) < 24:
@@ -342,7 +340,7 @@ if uploaded_files:
                 st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
                 
                 # ------------------------------------------------------------------
-                # B. 查看月度对比详细数据表 (含环比)
+                # B. 月度对比详细数据表
                 # ------------------------------------------------------------------
                 st.markdown("---")
                 with st.expander("📋 点击展开：查看月度对比详细数据表（含环比增长率）", expanded=True):
@@ -375,36 +373,62 @@ if uploaded_files:
                 st.warning("请至少选择一个账号查看趋势图。")
 
             # ------------------------------------------------------------------
-            # C. 🔥🔥 核心指标环比透视表 (MoM Pivot Matrix) 🔥🔥
+            # C. 🔥🔥 核心指标详细透视 (数值 + 环比) 🔥🔥
             # ------------------------------------------------------------------
             st.markdown("---")
-            st.subheader("📅 核心指标环比透视表 (MoM Growth Matrix)")
-            st.info("此表格展示各账号在不同月份的【环比增长率】（相比上个月增长了百分之多少）。方便横向对比增长势头。")
+            st.subheader("📅 核心指标详细透视表 (数值 + 环比)")
+            st.info("📊 此表格展示了每个月的数据以及对应的环比变化，列顺序为：[10月数值] -> [10月环比] -> [11月数值] -> [11月环比]...")
 
-            # 映射：指标名 -> 计算好的环比列名
-            mom_metric_map = {
-                "互动率": "互动率环比",
-                "封面点击率": "点击率环比",
-                "涨粉数": "涨粉环比"
+            # 配置映射：指标名称 -> (数值列名, 环比列名, 数值格式化字符串)
+            metric_configs = {
+                "涨粉数": {"val_col": "涨粉", "mom_col": "涨粉环比", "fmt": "{:,.0f}"},
+                "互动率": {"val_col": "互动率", "mom_col": "互动率环比", "fmt": "{:.2%}"},
+                "封面点击率": {"val_col": "封面点击率", "mom_col": "点击率环比", "fmt": "{:.2%}"}
             }
             
-            # 选择指标
-            target_metric_label = st.selectbox("👇 请选择要查看环比变化的指标：", list(mom_metric_map.keys()))
-            target_col = mom_metric_map[target_metric_label]
+            target_key = st.selectbox("👇 请选择要查看的指标：", list(metric_configs.keys()))
+            cfg = metric_configs[target_key]
 
             if not df_trend.empty:
-                # 创建透视表：行=账号，列=月份，值=环比数据
-                pivot_mom = df_trend.pivot(index='账号名', columns='年月', values=target_col)
+                # 1. 生成透视表，包含“数值”和“环比”两类值
+                # 结果是 MultiIndex Columns: Level 0 = [数值列, 环比列], Level 1 = [月份]
+                pivot_df = df_trend.pivot(index='账号名', columns='年月', values=[cfg['val_col'], cfg['mom_col']])
                 
-                # 确保列（月份）是按从小到大排序的
-                pivot_mom = pivot_mom.sort_index(axis=1)
+                # 2. 获取所有月份并排序
+                sorted_months = sorted(df_trend['年月'].unique())
                 
-                st.write(f"**📊 各账号 {target_metric_label} 环比增长率矩阵：**")
+                # 3. 构造新的列顺序：[数值, 月1], [环比, 月1], [数值, 月2], [环比, 月2]...
+                new_columns_order = []
+                for m in sorted_months:
+                    new_columns_order.append((cfg['val_col'], m))
+                    new_columns_order.append((cfg['mom_col'], m))
                 
-                # 格式化：显示正负百分比，并添加背景渐变（Red-Yellow-Green），便于观察涨跌
-                # na_rep="-" 表示第一个月没有环比数据时显示横杠
-                st.dataframe(pivot_mom.style.format("{:+.2%}", na_rep="-")
-                             .background_gradient(cmap='RdYlGn', axis=None, vmin=-0.5, vmax=0.5))
+                # 4. 根据新顺序重排 DataFrame 列
+                # 注意：如果某个月只有数值没有环比（如第一个月），pivot会自动填充NaN，逻辑依然成立
+                try:
+                    df_final = pivot_df[new_columns_order]
+                    
+                    # 5. 设置样式 (Styler)
+                    # Pandas IndexSlice 用于在 Styler 中选中特定的层级
+                    idx = pd.IndexSlice
+                    
+                    styler = df_final.style
+                    
+                    # 格式化数值列 (Level 0 是 val_col, Level 1 是 任意月份)
+                    styler = styler.format(cfg['fmt'], subset=idx[:, (cfg['val_col'], slice(None))])
+                    
+                    # 格式化环比列 (带正负号百分比，空值显示-)
+                    styler = styler.format("{:+.1%}", na_rep="-", subset=idx[:, (cfg['mom_col'], slice(None))])
+                    
+                    # 给环比列加背景色 (红绿涨跌)
+                    styler = styler.background_gradient(cmap='RdYlGn', vmin=-0.5, vmax=0.5, 
+                                                      subset=idx[:, (cfg['mom_col'], slice(None))])
+                    
+                    st.write(f"**📊 各账号 {target_key} 月度详细数据表：**")
+                    st.dataframe(styler)
+                    
+                except KeyError as e:
+                    st.error(f"数据重排时出错，可能是某些月份数据缺失导致。详细错误: {e}")
             else:
                 st.warning("暂无数据可用于生成透视表。")
 
