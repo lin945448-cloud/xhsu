@@ -328,10 +328,10 @@ if uploaded_files:
                             if len(sub_data) < 20:
                                 for x, y in zip(sub_data['年月'], sub_data[metric_name]):
                                     if pd.notna(y):
-                                        ax.text(x, y, f"{y:.1%}", ha='center', va='bottom', fontsize=9, 
+                                        ax.text(x, y, f"{y:.1%}", ha='center', va='bottom', fontsize=12, 
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
 
-                    ax.set_title(title_text, fontsize=16)
+                    ax.set_title(title_text, fontsize=20)
                     ax.set_xlabel("月份")
                     ax.set_ylabel("百分比")
                     ax.legend(loc='best')
@@ -343,11 +343,11 @@ if uploaded_files:
                 # 展示图表
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
-                    st.subheader("🔥 互动率 - 月度趋势")
+                    st.subheader("互动率 - 月度趋势")
                     st.pyplot(plot_compare_metric('互动率', '账号互动率月度对比'))
                 
                 with col_g2:
-                    st.subheader("👀 封面点击率 - 月度趋势")
+                    st.subheader("封面点击率 - 月度趋势")
                     st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度对比'))
                 
                 # 展示聚合后的数据表（方便老板复制）
@@ -389,3 +389,4 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
