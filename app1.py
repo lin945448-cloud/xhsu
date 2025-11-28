@@ -337,14 +337,14 @@ if uploaded_files:
                                 for x, y in zip(x_vals, y_vals):
                                     if pd.notna(y):
                                         txt = f"{y:.1%}" if is_percent else f"{int(y)}"
-                                        ax.text(x, y, txt, ha='center', va='bottom', fontsize=10, 
+                                        ax.text(x, y, txt, ha='center', va='bottom', fontsize=12, 
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
 
                     ax.set_title(title_text, fontsize=16)
-                    ax.set_xlabel("月份", fontsize=12)
-                    ax.set_ylabel("数值", fontsize=12)
-                    ax.tick_params(axis='both', labelsize=10)
-                    ax.legend(loc='best', fontsize=10)
+                    ax.set_xlabel("月份", fontsize=14)
+                    ax.set_ylabel("数值", fontsize=14)
+                    ax.tick_params(axis='both', labelsize=12)
+                    ax.legend(loc='best', fontsize=14)
                     ax.grid(True, linestyle='--', alpha=0.5)
                     if is_percent:
                         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
@@ -465,3 +465,4 @@ if uploaded_files:
 
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
