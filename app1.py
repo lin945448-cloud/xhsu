@@ -256,7 +256,7 @@ if uploaded_files:
         # 🔥🔥 进阶功能：全景对比 & 环比分析 🔥🔥
         # ==============================================================================
         st.markdown("---")
-        st.header("🏆 账号/月份 核心指标趋势 & 环比分析", divider="orange")
+        st.header(" 账号/月份 核心指标趋势 & 环比分析", divider="orange")
         
         if all_data_list:
             # 1. 数据准备
@@ -329,14 +329,14 @@ if uploaded_files:
 
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
-                    st.subheader("🔥 互动率 - 月度趋势")
+                    st.subheader("互动率 - 月度趋势")
                     st.pyplot(plot_compare_metric('互动率', '账号互动率月度走势', is_percent=True))
                 
                 with col_g2:
-                    st.subheader("👀 封面点击率 - 月度趋势")
+                    st.subheader("封面点击率 - 月度趋势")
                     st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度走势', is_percent=True))
                 
-                st.subheader("📈 涨粉数 - 月度趋势")
+                st.subheader("涨粉数 - 月度趋势")
                 st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
                 
                 # ------------------------------------------------------------------
@@ -344,7 +344,7 @@ if uploaded_files:
                 # ------------------------------------------------------------------
                 st.markdown("---")
                 with st.expander("📋 点击展开：查看月度对比详细数据表（含环比增长率）", expanded=True):
-                    st.info("💡 **环比说明**：展示相比**上一个月**的增长百分比。")
+                    st.info("**环比说明**：展示相比**上一个月**的增长百分比。")
                     
                     display_cols = ['账号名', '年月', '涨粉', '涨粉环比', '互动率', '互动率环比', '封面点击率', '点击率环比', '曝光', '观看量']
                     df_display = df_chart[display_cols].copy()
@@ -364,8 +364,8 @@ if uploaded_files:
             # C. 🔥🔥 核心指标详细透视 (数值在前 + 环比在后) 🔥🔥
             # ------------------------------------------------------------------
             st.markdown("---")
-            st.subheader("📅 核心指标详细透视表 (数值在前，环比在后)")
-            st.info("📊 排序方式：[10月数值] | [11月数值] ... [10月环比] | [11月环比] ...")
+            st.subheader("📅 核心指标详细透视表 ")
+            # st.info("📊 排序方式：[10月数值] | [11月数值] ... [10月环比] | [11月环比] ...")
 
             metric_configs = {
                 "涨粉数": {"val_col": "涨粉", "mom_col": "涨粉环比", "fmt": "{:,.0f}"},
@@ -435,3 +435,4 @@ if uploaded_files:
 
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
