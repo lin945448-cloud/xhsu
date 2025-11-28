@@ -282,13 +282,16 @@ if uploaded_files:
             df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, pd.NA)
             
             # 4. 排序与计算环比
-            # 确保按【账号、年月】升序排列，保证环比计算正确，且小月份在前
+            # 确保按【账号、年月】升序排列
             df_trend.sort_values(by=['账号名', '年月'], ascending=[True, True], inplace=True)
             
             # 计算环比 (MoM)
             df_trend['涨粉环比'] = df_trend.groupby('账号名')['涨粉'].pct_change()
             df_trend['互动率环比'] = df_trend.groupby('账号名')['互动率'].pct_change()
             df_trend['点击率环比'] = df_trend.groupby('账号名')['封面点击率'].pct_change()
+            
+            # 🔥🔥 关键修复：将无穷大 (inf) 替换为 NaN，否则无法显示 "None" 🔥🔥
+            df_trend.replace([np.inf, -np.inf], np.nan, inplace=True)
             
             # 5. 账号选择器
             all_accounts = df_trend['账号名'].unique()
@@ -299,8 +302,6 @@ if uploaded_files:
             # ------------------------------------------------------------------
             if selected_accounts:
                 df_chart = df_trend[df_trend['账号名'].isin(selected_accounts)].copy()
-                
-                # 再次强制按【年月升序】排序，确保图表X轴是从左到右
                 df_chart.sort_values(by='年月', ascending=True, inplace=True)
 
                 def plot_compare_metric(metric_name, title_text, is_percent=True):
@@ -309,7 +310,6 @@ if uploaded_files:
                         sub_data = df_chart[df_chart['账号名'] == account]
                         if not sub_data.empty:
                             ax.plot(sub_data['年月'], sub_data[metric_name], marker='o', linewidth=2, label=account)
-                            
                             if len(sub_data) < 24:
                                 for x, y in zip(sub_data['年月'], sub_data[metric_name]):
                                     if pd.notna(y):
@@ -346,27 +346,15 @@ if uploaded_files:
                 with st.expander("📋 点击展开：查看月度对比详细数据表（含环比增长率）", expanded=True):
                     st.info("💡 **环比说明**：展示相比**上一个月**的增长百分比。")
                     
-                    display_cols = [
-                        '账号名', '年月', 
-                        '涨粉', '涨粉环比',
-                        '互动率', '互动率环比',
-                        '封面点击率', '点击率环比',
-                        '曝光', '观看量'
-                    ]
-                    
+                    display_cols = ['账号名', '年月', '涨粉', '涨粉环比', '互动率', '互动率环比', '封面点击率', '点击率环比', '曝光', '观看量']
                     df_display = df_chart[display_cols].copy()
                     
                     st.dataframe(df_display.style.format({
-                        '涨粉': '{:,.0f}',
-                        '互动率': '{:.2%}',
-                        '封面点击率': '{:.2%}',
-                        '曝光': '{:,.0f}',
-                        '观看量': '{:,.0f}',
-                        '涨粉环比': '{:+.1%}',
-                        '互动率环比': '{:+.1%}',
-                        '点击率环比': '{:+.1%}'
-                    }).bar(subset=['涨粉'], color='#d65f5f', vmin=0) 
-                      .background_gradient(subset=['互动率'], cmap='Greens')
+                        '涨粉': '{:,.0f}', '互动率': '{:.2%}', '封面点击率': '{:.2%}', '曝光': '{:,.0f}', '观看量': '{:,.0f}',
+                        '涨粉环比': '{:+.1%}', '互动率环比': '{:+.1%}', '点击率环比': '{:+.1%}'
+                    }, na_rep="None") # 这里也加了 na_rep 以防万一
+                    .bar(subset=['涨粉'], color='#d65f5f', vmin=0) 
+                    .background_gradient(subset=['互动率'], cmap='Greens')
                     )
 
             else:
@@ -379,7 +367,6 @@ if uploaded_files:
             st.subheader("📅 核心指标详细透视表 (数值在前，环比在后)")
             st.info("📊 排序方式：[10月数值] | [11月数值] ... [10月环比] | [11月环比] ...")
 
-            # 配置映射：指标名称 -> (数值列名, 环比列名, 数值格式化字符串)
             metric_configs = {
                 "涨粉数": {"val_col": "涨粉", "mom_col": "涨粉环比", "fmt": "{:,.0f}"},
                 "互动率": {"val_col": "互动率", "mom_col": "互动率环比", "fmt": "{:.2%}"},
@@ -390,29 +377,25 @@ if uploaded_files:
             cfg = metric_configs[target_key]
 
             if not df_trend.empty:
-                # 1. 生成透视表，包含“数值”和“环比”两类值
-                # 结果是 MultiIndex Columns: Level 0 = [数值列, 环比列], Level 1 = [月份]
+                # 1. 生成透视表
                 pivot_df = df_trend.pivot(index='账号名', columns='年月', values=[cfg['val_col'], cfg['mom_col']])
                 
                 # 2. 获取所有月份并排序
                 sorted_months = sorted(df_trend['年月'].unique())
                 
-                # 3. 🔥🔥 关键修改：先放所有数值列，再放所有环比列 🔥🔥
+                # 3. 构造新的列顺序：先所有数值，再所有环比
                 val_cols_ordered = [(cfg['val_col'], m) for m in sorted_months]
                 mom_cols_ordered = [(cfg['mom_col'], m) for m in sorted_months]
-                
-                # 拼接：所有月份数值 + 所有月份环比
                 new_columns_order = val_cols_ordered + mom_cols_ordered
                 
-                # 4. 根据新顺序重排 DataFrame 列
                 try:
                     df_final = pivot_df.reindex(columns=new_columns_order)
                     
-                    # 5. 设置样式 (Styler)
+                    # 4. 设置样式 (Styler)
                     idx = pd.IndexSlice
                     styler = df_final.style
                     
-                    # 格式化数值列 (数值为空填充None)
+                    # 格式化数值列 (空值填充None)
                     styler = styler.format(cfg['fmt'], na_rep="None", subset=idx[:, (cfg['val_col'], slice(None))])
                     
                     # 格式化环比列 (带正负号百分比，空值填充None)
