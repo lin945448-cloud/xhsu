@@ -251,7 +251,7 @@ if uploaded_files:
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
 
-if processed_dfs:
+    if processed_dfs:
         # ==============================================================================
         # 🔥🔥 进阶功能：全景对比 & 环比分析 🔥🔥
         # ==============================================================================
@@ -361,7 +361,7 @@ if processed_dfs:
                         '曝光', '观看量'
                     ]
                     
-                    # 表格也按照年月升序（旧在前，新在后），如果想新月份在最上面，可改为 ascending=False
+                    # 表格也按照年月升序（旧在前，新在后）
                     df_display = df_chart[display_cols].copy()
                     
                     st.dataframe(df_display.style.format({
@@ -377,39 +377,49 @@ if processed_dfs:
                       .background_gradient(subset=['互动率'], cmap='Greens')
                     )
 
+                # ------------------------------------------------------------------
+                # C. 🔥🔥 核心指标环比透视表 (Month-over-Month) 🔥🔥
+                # ------------------------------------------------------------------
+                st.markdown("---")
+                st.subheader("📅 核心指标环比数据透视 (Month-over-Month)")
+                st.info("📊 全局视角：对比不同账号在各月份的**环比增长率**（相比上个月的涨跌幅度）。")
+
+                # 定义选项映射：显示名称 -> 实际列名
+                mom_options = {
+                    "涨粉数 - 环比增长率": "涨粉环比",
+                    "互动率 - 环比增长率": "互动率环比",
+                    "点击率 - 环比增长率": "点击率环比"
+                }
+                
+                c_mom1, c_mom2 = st.columns([1, 2])
+                selected_mom_label = c_mom1.selectbox("👇 选择要查看的环比指标：", list(mom_options.keys()))
+                selected_mom_col = mom_options[selected_mom_label]
+
+                if selected_accounts:
+                    # 使用 Section A 中筛选出的数据 (df_chart 已经按时间排序)
+                    # 制作透视表：行=账号，列=年月，值=环比数据
+                    try:
+                        pivot_mom = df_chart.pivot(index='账号名', columns='年月', values=selected_mom_col)
+                        
+                        # 确保列按时间排序 (虽有df_chart排序在先，但pivot后columns可能是PeriodIndex或String，保险起见sort_index)
+                        pivot_mom = pivot_mom.sort_index(axis=1)
+                        
+                        st.write(f"**各账号【{selected_mom_label}】表现概览：**")
+                        
+                        # 样式设置：百分比显示，带正负号，NaN显示为'-'
+                        # 使用 coolwarm 颜色映射：蓝色代表负值(下降)，红色代表正值(增长)，中间白色
+                        st.dataframe(pivot_mom.style
+                                     .format("{:+.1%}", na_rep="-")
+                                     .background_gradient(cmap='coolwarm', axis=None, vmin=-0.5, vmax=0.5) 
+                                     # vmin/vmax 设置颜色阈值，超过50%涨跌幅颜色最深，避免个别异常值拉偏色阶
+                                     )
+                    except Exception as e:
+                        st.error(f"无法生成透视表，可能数据列缺失或格式有误。错误信息: {e}")
+                else:
+                    st.warning("请在上方选择至少一个账号以查看透视表。")
+
             else:
                 st.warning("请至少选择一个账号查看趋势图。")
-
-            # ------------------------------------------------------------------
-            # C. (保留) 核心指标同比透视表
-            # ------------------------------------------------------------------
-            st.markdown("---")
-            st.subheader("📅 核心指标同比透视表 (Year-over-Year)")
-            st.info("方便对比同一月份在不同年份的表现（例如：今年10月 vs 去年10月）。")
-
-            yoy_metric_map = {"互动率":"互动率", "封面点击率":"封面点击率", "涨粉数":"涨粉", "曝光量":"曝光"}
-            c_yoy1, c_yoy2 = st.columns(2)
-            target_account = c_yoy1.selectbox("选择同比分析账号", all_accounts)
-            target_metric_label = c_yoy2.selectbox("选择同比指标", list(yoy_metric_map.keys()))
-            target_metric = yoy_metric_map[target_metric_label]
-
-            if target_account:
-                df_target = df_trend[df_trend['账号名'] == target_account]
-                if not df_target.empty:
-                    try:
-                        pivot_df = df_target.pivot(index='月份', columns='年份', values=target_metric)
-                        format_dict = {}
-                        for col in pivot_df.columns:
-                            if target_metric in ['互动率', '封面点击率']:
-                                format_dict[col] = "{:.2%}"
-                            else:
-                                format_dict[col] = "{:,.0f}"
-                        st.write(f"**【{target_account}】的 {target_metric_label} 同比数据表：**")
-                        st.dataframe(pivot_df.style.format(format_dict).highlight_max(axis=1, color='#d4edda'))
-                    except Exception as e:
-                        st.warning("数据不足，无法生成跨年对比表。")
-                else:
-                    st.warning("该账号无数据。")
 
         # ==============================================================================
         # Excel 导出逻辑
@@ -432,4 +442,3 @@ if processed_dfs:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
-
