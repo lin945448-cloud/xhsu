@@ -261,7 +261,9 @@ if uploaded_files:
         if all_data_list:
             # 1. 数据准备
             df_all = pd.concat(all_data_list, ignore_index=True)
+            
             # 生成 YYYY-MM 格式的年月字符串
+            # 注意：字符串排序 "2023-01" < "2023-02"，所以自然升序即可满足“小月份在前”
             df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
             df_all['估算点击数'] = df_all['封面点击率'] * df_all['曝光']
 
@@ -281,18 +283,14 @@ if uploaded_files:
             df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, pd.NA)
             
             # 4. 🔥🔥 核心修改：确保按【时间升序】排序，保证 10月在前，11月在后 🔥🔥
-            # 先按账号，再按年月升序排列，这样计算环比才是 (本月-上月)/上月
+            # 先按账号分组，再按年月升序（True），这样 pct_change 计算的就是 (本月-上月)/上月
             df_trend.sort_values(by=['账号名', '年月'], ascending=[True, True], inplace=True)
             
-            # 对每个账号分组，计算各个指标相比上一行的变化率
+            # 计算环比 (MoM)
             df_trend['涨粉环比'] = df_trend.groupby('账号名')['涨粉'].pct_change()
             df_trend['互动率环比'] = df_trend.groupby('账号名')['互动率'].pct_change()
             df_trend['点击率环比'] = df_trend.groupby('账号名')['封面点击率'].pct_change()
             
-            # 辅助列
-            df_trend['年份'] = df_trend['年月'].str[:4]
-            df_trend['月份'] = df_trend['年月'].str[5:7]
-
             # 5. 账号选择器
             all_accounts = df_trend['账号名'].unique()
             selected_accounts = st.multiselect("👇 1. 请选择要对比趋势的账号：", all_accounts, default=all_accounts)
@@ -303,19 +301,17 @@ if uploaded_files:
             if selected_accounts:
                 df_chart = df_trend[df_trend['账号名'].isin(selected_accounts)].copy()
                 
-                # 🔥🔥 再次强制按【年月升序】排序，确保图表X轴是从左到右（10月->11月） 🔥🔥
+                # 🔥🔥 再次强制按【年月升序】排序，确保图表X轴是从左到右（小月份->大月份） 🔥🔥
                 df_chart.sort_values(by='年月', ascending=True, inplace=True)
 
                 def plot_compare_metric(metric_name, title_text, is_percent=True):
                     fig, ax = plt.subplots(figsize=(14, 6))
-                    # 按照用户选择的顺序绘图，或者按照数据中的账号顺序
                     for account in selected_accounts:
                         sub_data = df_chart[df_chart['账号名'] == account]
                         if not sub_data.empty:
-                            # sub_data 已经继承了 df_chart 的按年月升序排列
+                            # 画图
                             ax.plot(sub_data['年月'], sub_data[metric_name], marker='o', linewidth=2, label=account)
                             
-                            # 只有数据点较少时才显示数值标签，防止重叠
                             if len(sub_data) < 24:
                                 for x, y in zip(sub_data['年月'], sub_data[metric_name]):
                                     if pd.notna(y):
@@ -346,13 +342,12 @@ if uploaded_files:
                 st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
                 
                 # ------------------------------------------------------------------
-                # B. 🔥🔥 升级版：查看月度对比详细数据表 (含环比) 🔥🔥
+                # B. 查看月度对比详细数据表 (含环比)
                 # ------------------------------------------------------------------
                 st.markdown("---")
                 with st.expander("📋 点击展开：查看月度对比详细数据表（含环比增长率）", expanded=True):
-                    st.info("💡 **环比说明**：展示相比**上一个月**的增长百分比。红色代表增长/正数，绿色代表下降/负数。")
+                    st.info("💡 **环比说明**：展示相比**上一个月**的增长百分比。")
                     
-                    # 准备展示的数据列
                     display_cols = [
                         '账号名', '年月', 
                         '涨粉', '涨粉环比',
@@ -361,7 +356,6 @@ if uploaded_files:
                         '曝光', '观看量'
                     ]
                     
-                    # 表格也按照年月升序（旧在前，新在后）
                     df_display = df_chart[display_cols].copy()
                     
                     st.dataframe(df_display.style.format({
@@ -370,75 +364,69 @@ if uploaded_files:
                         '封面点击率': '{:.2%}',
                         '曝光': '{:,.0f}',
                         '观看量': '{:,.0f}',
-                        '涨粉环比': '{:+.1%}',     # 显示正负号，如 +10.5%
+                        '涨粉环比': '{:+.1%}',
                         '互动率环比': '{:+.1%}',
                         '点击率环比': '{:+.1%}'
                     }).bar(subset=['涨粉'], color='#d65f5f', vmin=0) 
                       .background_gradient(subset=['互动率'], cmap='Greens')
                     )
 
-                # ------------------------------------------------------------------
-                # C. 🔥🔥 核心指标环比透视表 (Month-over-Month) 🔥🔥
-                # ------------------------------------------------------------------
-                st.markdown("---")
-                st.subheader("📅 核心指标环比数据透视 (Month-over-Month)")
-                st.info("📊 全局视角：对比不同账号在各月份的**环比增长率**（相比上个月的涨跌幅度）。")
-
-                # 定义选项映射：显示名称 -> 实际列名
-                mom_options = {
-                    "涨粉数 - 环比增长率": "涨粉环比",
-                    "互动率 - 环比增长率": "互动率环比",
-                    "点击率 - 环比增长率": "点击率环比"
-                }
-                
-                c_mom1, c_mom2 = st.columns([1, 2])
-                selected_mom_label = c_mom1.selectbox("👇 选择要查看的环比指标：", list(mom_options.keys()))
-                selected_mom_col = mom_options[selected_mom_label]
-
-                if selected_accounts:
-                    # 使用 Section A 中筛选出的数据 (df_chart 已经按时间排序)
-                    # 制作透视表：行=账号，列=年月，值=环比数据
-                    try:
-                        pivot_mom = df_chart.pivot(index='账号名', columns='年月', values=selected_mom_col)
-                        
-                        # 确保列按时间排序 (虽有df_chart排序在先，但pivot后columns可能是PeriodIndex或String，保险起见sort_index)
-                        pivot_mom = pivot_mom.sort_index(axis=1)
-                        
-                        st.write(f"**各账号【{selected_mom_label}】表现概览：**")
-                        
-                        # 样式设置：百分比显示，带正负号，NaN显示为'-'
-                        # 使用 coolwarm 颜色映射：蓝色代表负值(下降)，红色代表正值(增长)，中间白色
-                        st.dataframe(pivot_mom.style
-                                     .format("{:+.1%}", na_rep="-")
-                                     .background_gradient(cmap='coolwarm', axis=None, vmin=-0.5, vmax=0.5) 
-                                     # vmin/vmax 设置颜色阈值，超过50%涨跌幅颜色最深，避免个别异常值拉偏色阶
-                                     )
-                    except Exception as e:
-                        st.error(f"无法生成透视表，可能数据列缺失或格式有误。错误信息: {e}")
-                else:
-                    st.warning("请在上方选择至少一个账号以查看透视表。")
-
             else:
                 st.warning("请至少选择一个账号查看趋势图。")
 
-        # ==============================================================================
-        # Excel 导出逻辑
-        # ==============================================================================
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-            for name, d in processed_dfs.items():
-                d.to_excel(writer, sheet_name=name, index=False)
-            if all_data_list:
-                pd.concat(all_data_list, ignore_index=True).to_excel(writer, sheet_name="所有数据明细汇总", index=False)
-            if 'df_trend' in locals():
-                df_trend.to_excel(writer, sheet_name="月度统计(含环比)", index=False)
+            # ------------------------------------------------------------------
+            # C. 🔥🔥 核心指标环比透视表 (MoM Pivot Matrix) 🔥🔥
+            # ------------------------------------------------------------------
+            st.markdown("---")
+            st.subheader("📅 核心指标环比透视表 (MoM Growth Matrix)")
+            st.info("此表格展示各账号在不同月份的【环比增长率】（相比上个月增长了百分之多少）。方便横向对比增长势头。")
 
-        with placeholder_top.container():
-            st.header("汇总Excel下载", divider="rainbow")
-            st.download_button("⬇️ 下载汇总Excel报告（含月度分析表）",
-                               data=excel_buffer.getvalue(),
-                               file_name="小红书分析汇总报告.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        st.balloons()
+            # 映射：指标名 -> 计算好的环比列名
+            mom_metric_map = {
+                "互动率": "互动率环比",
+                "封面点击率": "点击率环比",
+                "涨粉数": "涨粉环比"
+            }
+            
+            # 选择指标
+            target_metric_label = st.selectbox("👇 请选择要查看环比变化的指标：", list(mom_metric_map.keys()))
+            target_col = mom_metric_map[target_metric_label]
+
+            if not df_trend.empty:
+                # 创建透视表：行=账号，列=月份，值=环比数据
+                pivot_mom = df_trend.pivot(index='账号名', columns='年月', values=target_col)
+                
+                # 确保列（月份）是按从小到大排序的
+                pivot_mom = pivot_mom.sort_index(axis=1)
+                
+                st.write(f"**📊 各账号 {target_metric_label} 环比增长率矩阵：**")
+                
+                # 格式化：显示正负百分比，并添加背景渐变（Red-Yellow-Green），便于观察涨跌
+                # na_rep="-" 表示第一个月没有环比数据时显示横杠
+                st.dataframe(pivot_mom.style.format("{:+.2%}", na_rep="-")
+                             .background_gradient(cmap='RdYlGn', axis=None, vmin=-0.5, vmax=0.5))
+            else:
+                st.warning("暂无数据可用于生成透视表。")
+
+    # ==============================================================================
+    # Excel 导出逻辑
+    # ==============================================================================
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        for name, d in processed_dfs.items():
+            d.to_excel(writer, sheet_name=name, index=False)
+        if all_data_list:
+            pd.concat(all_data_list, ignore_index=True).to_excel(writer, sheet_name="所有数据明细汇总", index=False)
+        if 'df_trend' in locals():
+            df_trend.to_excel(writer, sheet_name="月度统计(含环比)", index=False)
+
+    with placeholder_top.container():
+        st.header("汇总Excel下载", divider="rainbow")
+        st.download_button("⬇️ 下载汇总Excel报告（含月度分析表）",
+                           data=excel_buffer.getvalue(),
+                           file_name="小红书分析汇总报告.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.balloons()
+
 else:
     st.info("👆 请上传Excel文件开始分析。")
