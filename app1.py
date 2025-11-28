@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, MultipleLocator
+from matplotlib.ticker import MaxNLocator, MultipleLocator, FuncFormatter
 import matplotlib.font_manager as fm
 import matplotlib.patheffects as path_effects
 from adjustText import adjust_text
@@ -27,7 +27,7 @@ else:
     plt.rcParams['axes.unicode_minus'] = False
 
 # ==============================================================================
-# 基础绘图函数：带标注的线图（保持不动）
+# 基础绘图函数：带标注的线图
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
     """通用绘线函数，用于保存为HTML时复用"""
@@ -235,7 +235,8 @@ def analyze_and_display(df, filename):
 # 主逻辑：文件上传、汇总下载
 # ==============================================================================
 st.title("📊 小红书数据分析平台")
-st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。注：1.该平台只针对小红书后台导出的数据。2.多个文件请分析完一个再上传下一个")
+st.markdown("上传一个或多个 Excel 文件，系统会分析并生成**独立可视化 HTML 报告**与汇总 Excel。")
+st.info("💡 提示：如需进行【账号/月份横向对比】，请确保不同文件代表不同账号，或者文件内包含不同月份的数据。")
 
 uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文件",
     type=["xls","xlsx"], accept_multiple_files=True)
@@ -243,7 +244,7 @@ uploaded_files = st.file_uploader("请上传小红书后台导出的 Excel 文�
 if uploaded_files:
     placeholder_top = st.empty()
     processed_dfs = {}
-    all_data_list = []  # ✅ 1. 用于存储所有表格数据，供最后大汇总使用
+    all_data_list = []
 
     for up_file in uploaded_files:
         try:
@@ -255,7 +256,7 @@ if uploaded_files:
                 # 获取账号名（去除后缀）
                 account_name = os.path.splitext(up_file.name)[0]
                 
-                # ✅ 2. 创建用于导出的副本，并在第一列插入“账号名”
+                # 创建用于导出的副本，并在第一列插入“账号名”
                 df_export = df_processed.copy()
                 df_export.insert(0, "账号名", account_name)
                 
@@ -270,21 +271,118 @@ if uploaded_files:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
 
     if processed_dfs:
+        # ==============================================================================
+        # 🔥🔥 新增功能：账号/月份 横向对比分析模块 🔥🔥
+        # ==============================================================================
+        st.markdown("---")
+        st.header("🏆 账号/月份 核心指标趋势对比", divider="orange")
+        
+        if all_data_list:
+            # 1. 数据合并与清洗
+            df_all = pd.concat(all_data_list, ignore_index=True)
+            
+            # 提取“年月”（格式：YYYY-MM），方便按月对比
+            df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
+            
+            # 估算点击数（用于加权计算）：因为点击率是百分比，这里反推点击次数
+            # 逻辑：点击数 = 封面点击率 * 曝光
+            df_all['估算点击数'] = df_all['封面点击率'] * df_all['曝光']
+
+            # 2. 按“账号名”和“年月”进行分组聚合（加权计算）
+            df_trend = df_all.groupby(['账号名', '年月']).agg({
+                '曝光': 'sum',
+                '观看量': 'sum',
+                '点赞': 'sum',
+                '收藏': 'sum',
+                '评论': 'sum',
+                '估算点击数': 'sum'
+            }).reset_index()
+
+            # 3. 重新计算核心比率（加权后的真实月度数据）
+            # 互动率 = (赞+藏+评) / 观看
+            df_trend['互动率'] = (df_trend['点赞'] + df_trend['收藏'] + df_trend['评论']) / df_trend['观看量'].replace(0, pd.NA)
+            # 封面点击率 = 总点击 / 总曝光
+            df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, pd.NA)
+
+            # 4. 用户交互：选择要分析的账号
+            all_accounts = df_trend['账号名'].unique()
+            # 默认全选，如果账号太多可以改成 default=all_accounts[:3]
+            selected_accounts = st.multiselect("👇 请选择要对比的账号（选择单个账号即可查看该账号的月度走势）：", 
+                                               all_accounts, default=all_accounts)
+
+            if selected_accounts:
+                df_chart = df_trend[df_trend['账号名'].isin(selected_accounts)].copy()
+                df_chart.sort_values(by='年月', inplace=True)
+
+                # 绘图通用函数
+                def plot_compare_metric(metric_name, title_text):
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                    
+                    # 为每个选中的账号画一条线
+                    for account in selected_accounts:
+                        sub_data = df_chart[df_chart['账号名'] == account]
+                        if not sub_data.empty:
+                            ax.plot(sub_data['年月'], sub_data[metric_name], marker='o', linewidth=2, label=account)
+                            
+                            # 只有当数据点少于20个时才显示具体数值，避免重叠太乱
+                            if len(sub_data) < 20:
+                                for x, y in zip(sub_data['年月'], sub_data[metric_name]):
+                                    if pd.notna(y):
+                                        ax.text(x, y, f"{y:.1%}", ha='center', va='bottom', fontsize=9, 
+                                                color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
+
+                    ax.set_title(title_text, fontsize=16)
+                    ax.set_xlabel("月份")
+                    ax.set_ylabel("百分比")
+                    ax.legend(loc='best')
+                    ax.grid(True, linestyle='--', alpha=0.5)
+                    # Y轴显示百分比格式
+                    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+                    return fig
+
+                # 展示图表
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    st.subheader("🔥 互动率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('互动率', '账号互动率月度对比'))
+                
+                with col_g2:
+                    st.subheader("👀 封面点击率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度对比'))
+                
+                # 展示聚合后的数据表（方便老板复制）
+                with st.expander("查看月度对比详细数据表"):
+                    st.dataframe(df_trend[df_trend['账号名'].isin(selected_accounts)].style.format({
+                        '互动率': '{:.2%}',
+                        '封面点击率': '{:.2%}',
+                        '曝光': '{:,.0f}',
+                        '观看量': '{:,.0f}'
+                    }))
+            else:
+                st.warning("请至少选择一个账号进行分析。")
+
+        # ==============================================================================
+        # Excel 导出逻辑（包含新增的月度统计表）
+        # ==============================================================================
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             
-            # ✅ 3. 先写入各个独立的Sheet（每个Sheet第一列都有账号名）
+            # 1. 写入各个独立的Sheet
             for name, d in processed_dfs.items():
                 d.to_excel(writer, sheet_name=name, index=False)
             
-            # ✅ 4. 最后写入汇总的大Sheet（包含所有数据，无空行，第一列为账号名）
+            # 2. 写入汇总的大Sheet
             if all_data_list:
                 df_summary = pd.concat(all_data_list, ignore_index=True)
-                df_summary.to_excel(writer, sheet_name="所有数据汇总", index=False)
+                df_summary.to_excel(writer, sheet_name="所有数据明细汇总", index=False)
+            
+            # 3. 写入老板需要的月度统计表 (如果已计算)
+            if 'df_trend' in locals():
+                df_trend.to_excel(writer, sheet_name="月度核心指标统计", index=False)
 
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
-            st.download_button("⬇️ 下载汇总Excel报告",
+            st.download_button("⬇️ 下载汇总Excel报告（含月度分析表）",
                                data=excel_buffer.getvalue(),
                                file_name="小红书分析汇总报告.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
