@@ -251,7 +251,7 @@ if uploaded_files:
         except Exception as e:
             st.error(f"处理文件 {up_file.name} 时发生错误: {e}")
 
-    if processed_dfs:
+if processed_dfs:
         # ==============================================================================
         # 🔥🔥 进阶功能：全景对比 & 环比分析 🔥🔥
         # ==============================================================================
@@ -261,6 +261,7 @@ if uploaded_files:
         if all_data_list:
             # 1. 数据准备
             df_all = pd.concat(all_data_list, ignore_index=True)
+            # 生成 YYYY-MM 格式的年月字符串
             df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
             df_all['估算点击数'] = df_all['封面点击率'] * df_all['曝光']
 
@@ -279,8 +280,9 @@ if uploaded_files:
             df_trend['互动率'] = (df_trend['点赞'] + df_trend['收藏'] + df_trend['评论']) / df_trend['观看量'].replace(0, pd.NA)
             df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, pd.NA)
             
-            # 4. 🔥🔥 核心修改：计算环比数据 (MoM) 🔥🔥
-            df_trend.sort_values(by=['账号名', '年月'], inplace=True)
+            # 4. 🔥🔥 核心修改：确保按【时间升序】排序，保证 10月在前，11月在后 🔥🔥
+            # 先按账号，再按年月升序排列，这样计算环比才是 (本月-上月)/上月
+            df_trend.sort_values(by=['账号名', '年月'], ascending=[True, True], inplace=True)
             
             # 对每个账号分组，计算各个指标相比上一行的变化率
             df_trend['涨粉环比'] = df_trend.groupby('账号名')['涨粉'].pct_change()
@@ -300,14 +302,20 @@ if uploaded_files:
             # ------------------------------------------------------------------
             if selected_accounts:
                 df_chart = df_trend[df_trend['账号名'].isin(selected_accounts)].copy()
-                df_chart.sort_values(by='年月', inplace=True)
+                
+                # 🔥🔥 再次强制按【年月升序】排序，确保图表X轴是从左到右（10月->11月） 🔥🔥
+                df_chart.sort_values(by='年月', ascending=True, inplace=True)
 
                 def plot_compare_metric(metric_name, title_text, is_percent=True):
                     fig, ax = plt.subplots(figsize=(14, 6))
+                    # 按照用户选择的顺序绘图，或者按照数据中的账号顺序
                     for account in selected_accounts:
                         sub_data = df_chart[df_chart['账号名'] == account]
                         if not sub_data.empty:
+                            # sub_data 已经继承了 df_chart 的按年月升序排列
                             ax.plot(sub_data['年月'], sub_data[metric_name], marker='o', linewidth=2, label=account)
+                            
+                            # 只有数据点较少时才显示数值标签，防止重叠
                             if len(sub_data) < 24:
                                 for x, y in zip(sub_data['年月'], sub_data[metric_name]):
                                     if pd.notna(y):
@@ -353,10 +361,9 @@ if uploaded_files:
                         '曝光', '观看量'
                     ]
                     
+                    # 表格也按照年月升序（旧在前，新在后），如果想新月份在最上面，可改为 ascending=False
                     df_display = df_chart[display_cols].copy()
                     
-                    # 定义样式格式化函数
-                    # 注意：pandas 样式中，nan通常显示为空或nan
                     st.dataframe(df_display.style.format({
                         '涨粉': '{:,.0f}',
                         '互动率': '{:.2%}',
@@ -366,8 +373,8 @@ if uploaded_files:
                         '涨粉环比': '{:+.1%}',     # 显示正负号，如 +10.5%
                         '互动率环比': '{:+.1%}',
                         '点击率环比': '{:+.1%}'
-                    }).bar(subset=['涨粉'], color='#d65f5f', vmin=0) # 涨粉列加简单的条形图背景
-                      .background_gradient(subset=['互动率'], cmap='Greens') # 互动率加绿色深浅背景
+                    }).bar(subset=['涨粉'], color='#d65f5f', vmin=0) 
+                      .background_gradient(subset=['互动率'], cmap='Greens')
                     )
 
             else:
@@ -425,3 +432,4 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
