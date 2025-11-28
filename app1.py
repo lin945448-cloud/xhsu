@@ -332,8 +332,8 @@ if uploaded_files:
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
 
                     ax.set_title(title_text, fontsize=20)
-                    ax.set_xlabel("月份")
-                    ax.set_ylabel("百分比")
+                    ax.set_xlabel("月份", fontsize=16)
+                    ax.set_ylabel("百分比", fontsize=16)
                     ax.legend(loc='best')
                     ax.grid(True, linestyle='--', alpha=0.5)
                     # Y轴显示百分比格式
@@ -389,4 +389,5 @@ if uploaded_files:
         st.balloons()
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
