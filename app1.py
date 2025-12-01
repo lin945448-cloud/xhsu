@@ -354,7 +354,8 @@ if uploaded_files:
                                         txt = f"{y:.1%}" if is_percent else f"{int(y)}"
                                         ax.text(x, y, txt, ha='center', va='bottom', fontsize=12, 
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
-
+                    # 👇👇👇 在这里加上这一行代码 👇👇👇
+                    ax.margins(y=0.5)  
                     ax.set_title(title_text, fontsize=16)
                     ax.set_xlabel("月份", fontsize=14)
                     ax.set_ylabel("数值", fontsize=14)
@@ -480,5 +481,6 @@ if uploaded_files:
 
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
 
