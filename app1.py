@@ -375,8 +375,11 @@ if uploaded_files:
                     st.subheader("封面点击率 - 月度趋势")
                     st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度走势', is_percent=True))
                 
-                st.subheader("涨粉数 - 月度趋势")
-                st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
+                # 第二行再开两列，把涨粉图放在左边 (col_g3)，右边 (col_g4) 空着
+                col_g3, col_g4 = st.columns(2)
+                with col_g3:
+                    st.subheader("涨粉数 - 月度趋势")
+                    st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
                 
                 # ------------------------------------------------------------------
                 # B. 月度对比详细数据表
@@ -481,6 +484,7 @@ if uploaded_files:
 
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
 
 
