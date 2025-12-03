@@ -189,26 +189,55 @@ def analyze_and_display(df, filename):
         "曝光": "{:.0f}", "观看量": "{:.0f}", "点赞": "{:.0f}",
         "评论": "{:.0f}", "收藏": "{:.0f}", "涨粉": "{:.0f}", "分享": "{:.0f}"
     }, na_rep="--"))
+#核心指标按月份拆分
+    st.subheader("📈 核心指标平均值 (按月拆分)")
 
-    # 6. 核心指标卡片 (全量统计)
-    st.subheader("📈 核心指标平均值")
-    total_views = df["观看量"].sum()
-    total_expo = df["曝光"].sum()
-    total_likes = df["点赞"].sum()
-    total_favs = df["收藏"].sum()
-    total_comments = df["评论"].sum()
-    total_follows = df["涨粉"].sum()
+    sorted_months = sorted(df['年月'].unique())
 
-    avg_ctr = ((df["封面点击率"] * df["曝光"]).sum() / total_expo) if total_expo else float("nan")
-    avg_like_rate = (total_likes / total_views) if total_views else float("nan")
-    avg_fav_rate = (total_favs / total_views) if total_views else float("nan")
-    avg_eng_rate = ((total_likes + total_comments + total_favs) / total_views) if total_views else float("nan")
+    # 先遍历展示每个月的数据
+    for month in sorted_months:
+        df_month = df[df['年月'] == month]
+        
+        # 计算该月的汇总数据
+        m_total_views = df_month["观看量"].sum()
+        m_total_expo = df_month["曝光"].sum()
+        m_total_likes = df_month["点赞"].sum()
+        m_total_favs = df_month["收藏"].sum()
+        m_total_comments = df_month["评论"].sum()
 
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("平均封面点击率", f"{avg_ctr:.2%}")
-    c2.metric("平均点赞率", f"{avg_like_rate:.2%}")
-    c3.metric("平均收藏率", f"{avg_fav_rate:.2%}")
-    c4.metric("平均互动率", f"{avg_eng_rate:.2%}")
+        # 计算加权平均率 (避免直接求平均值的误差)
+        m_avg_ctr = ((df_month["封面点击率"] * df_month["曝光"]).sum() / m_total_expo) if m_total_expo else 0
+        m_avg_like_rate = (m_total_likes / m_total_views) if m_total_views else 0
+        m_avg_fav_rate = (m_total_favs / m_total_views) if m_total_views else 0
+        m_avg_eng_rate = ((m_total_likes + m_total_comments + m_total_favs) / m_total_views) if m_total_views else 0
+
+        # 展示
+        st.markdown(f"**🗓️ {month} 月度表现 (共 {len(df_month)} 篇)**")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(f"{month} 平均封面点击率", f"{m_avg_ctr:.2%}")
+        c2.metric(f"{month} 平均点赞率", f"{m_avg_like_rate:.2%}")
+        c3.metric(f"{month} 平均收藏率", f"{m_avg_fav_rate:.2%}")
+        c4.metric(f"{month} 平均互动率", f"{m_avg_eng_rate:.2%}")
+        st.markdown("---") # 分割线
+
+    # 可选：如果还是想要一个“全局汇总”放在最下面（或者最上面），可以保留原来的代码
+    with st.expander("查看【全局累计】平均指标（所有月份汇总）"):
+        total_views = df["观看量"].sum()
+        total_expo = df["曝光"].sum()
+        total_likes = df["点赞"].sum()
+        total_favs = df["收藏"].sum()
+        total_comments = df["评论"].sum()
+        
+        g_avg_ctr = ((df["封面点击率"] * df["曝光"]).sum() / total_expo) if total_expo else 0
+        g_avg_like_rate = (total_likes / total_views) if total_views else 0
+        g_avg_fav_rate = (total_favs / total_views) if total_views else 0
+        g_avg_eng_rate = ((total_likes + total_comments + total_favs) / total_views) if total_views else 0
+
+        gc1, gc2, gc3, gc4 = st.columns(4)
+        gc1.metric("全局平均点击率", f"{g_avg_ctr:.2%}")
+        gc2.metric("全局平均点赞率", f"{g_avg_like_rate:.2%}")
+        gc3.metric("全局平均收藏率", f"{g_avg_fav_rate:.2%}")
+        gc4.metric("全局平均互动率", f"{g_avg_eng_rate:.2%}")
 
     # ==============================================================================
     # 🔥 HTML 报告生成逻辑 (按月份拆分图表)
@@ -468,4 +497,5 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
 
