@@ -384,14 +384,17 @@ if uploaded_files:
                         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
                     return fig
 
-                # 使用 3 列布局
-                col_g1, col_g2, col_g3 = st.columns(3)
+                col_g1, col_g2 = st.columns(2)
                 with col_g1:
                     st.subheader("互动率 - 月度趋势")
                     st.pyplot(plot_compare_metric('互动率', '账号互动率月度走势', is_percent=True))
+                
                 with col_g2:
                     st.subheader("封面点击率 - 月度趋势")
                     st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度走势', is_percent=True))
+                
+                # 第二行再开两列，把涨粉图放在左边 (col_g3)，右边 (col_g4) 空着
+                col_g3, col_g4 = st.columns(2)
                 with col_g3:
                     st.subheader("涨粉数 - 月度趋势")
                     st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
@@ -465,3 +468,4 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
