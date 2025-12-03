@@ -6,7 +6,7 @@ import matplotlib.font_manager as fm
 import matplotlib.patheffects as path_effects
 from adjustText import adjust_text
 import io, os, base64
-import numpy as np  # 必须确保导入 numpy
+import numpy as np
 
 # ==============================================================================
 # 初始化页面
@@ -31,8 +31,11 @@ else:
 # 基础绘图函数：带标注的线图
 # ==============================================================================
 def plot_lines(ax, title, cols, df):
+    # 确保有数据，否则不绘图
+    if df.empty:
+        return
+
     for col in cols:
-        # 确保数据为数值型
         y_data = pd.to_numeric(df[col], errors='coerce')
         ax.plot(df["序号"], y_data, marker="o", linestyle="-", label=col)
         for x, y in zip(df["序号"], y_data):
@@ -54,7 +57,7 @@ def plot_lines(ax, title, cols, df):
                 )
 
     ax.margins(y=0.4)
-    ax.set_xlabel("本月发布顺序 (序号)", fontsize=12) # 修改 X 轴标签
+    ax.set_xlabel("本月发布顺序 (序号)", fontsize=12) 
     ax.set_ylabel("数值")
     ax.set_title(title)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -66,7 +69,12 @@ def plot_lines(ax, title, cols, df):
 # 核心互动指标趋势函数
 # ==============================================================================
 def plot_core_interaction(df):
-    fig, ax = plt.subplots(figsize=(12, 8)) #稍微调整高度，防止太长
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    if df.empty:
+        ax.text(0.5, 0.5, "无有效数据", ha='center', va='center')
+        return fig, ax
+
     cols = ["点赞率", "收藏率", "互动率"]
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     texts = []
@@ -106,7 +114,7 @@ def plot_core_interaction(df):
     adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", lw=0.4, color='gray'))
     ax.yaxis.set_major_locator(MultipleLocator(0.1))
     ax.margins(y=0.3)
-    ax.set_xlabel("本月发布顺序 (序号)", fontsize=12) # 修改 X 轴标签
+    ax.set_xlabel("本月发布顺序 (序号)", fontsize=12)
     ax.set_ylabel("数值")
     ax.set_title("核心互动指标趋势")
     ax.legend(title=f"最下面的线：{bottom_line}", title_fontsize=11)
@@ -121,6 +129,7 @@ def plot_core_interaction(df):
 def analyze_and_display(df, filename):
     st.header(f"--- 分析报告：【{filename}】 ---", divider='rainbow')
     
+    # 1. 列名清洗与重命名
     df.columns = df.columns.astype(str).str.strip()
     rename_map = {
         "曝光量":"曝光","阅读量":"观看量","播放量":"观看量","观看数":"观看量",
@@ -135,24 +144,25 @@ def analyze_and_display(df, filename):
         st.error(f"文件缺少必要列：{missing}")
         return None
     
-    # 时间处理
+    # 2. 时间处理与排序
     df["首次发布时间"] = pd.to_datetime(df["首次发布时间"], format='%Y年%m月%d日%H时%M分%S秒', errors='coerce')
     df.dropna(subset=["首次发布时间"], inplace=True)
     df.sort_values(by="首次发布时间", inplace=True)
     df.reset_index(drop=True, inplace=True)
-    # 全局序号（整个文件的顺序）
+    
+    # 全局序号（用于Excel导出和预览）
     df.insert(0, "序号", df.index + 1)
     
-    # 🔥 新增：生成“年月”列，用于后续分组绘图
+    # 🔥 关键步骤：生成“年月”列，用于后续分组
     df['年月'] = df['首次发布时间'].dt.to_period('M').astype(str)
 
     st.markdown(f"**📅 数据时间范围：{df['首次发布时间'].min().date()} 至 {df['首次发布时间'].max().date()}**")
 
-    # 1. 强制转换为数值类型
+    # 3. 数值转换
     for c in ["曝光","封面点击率","点赞","观看量","收藏","评论","涨粉","分享"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(float)
         
-    # 2. 计算衍生指标
+    # 4. 计算衍生指标
     df["点赞率"] = df["点赞"] / df["观看量"].replace(0, np.nan)
     df["收藏率"] = df["收藏"] / df["观看量"].replace(0, np.nan)
     df["赞藏比"] = df["点赞"] / df["收藏"].replace(0, np.nan)
@@ -161,6 +171,7 @@ def analyze_and_display(df, filename):
     df["有效活跃度"] = df["评论"] / (df["点赞"] + df["收藏"]).replace(0, np.nan)
     df["转粉率"] = df["涨粉"] / df["观看量"].replace(0, np.nan)
 
+    # 5. Streamlit 页面展示 (显示全量数据表)
     st.subheader("分析后的数据表")
     show_cols = [
         "序号","笔记标题","首次发布时间","体裁","曝光","观看量","封面点击率",
@@ -176,8 +187,7 @@ def analyze_and_display(df, filename):
         "评论": "{:.0f}", "收藏": "{:.0f}", "涨粉": "{:.0f}", "分享": "{:.0f}"
     }, na_rep="--"))
 
-    # ... (省略中间的指标卡片代码，保持不变) ...
-    # 这里为了节省篇幅，原有的计算 "核心指标平均值" 和 st.metric 部分请保留
+    # 6. 核心指标卡片 (全量统计)
     st.subheader("📈 核心指标平均值")
     total_views = df["观看量"].sum()
     total_expo = df["曝光"].sum()
@@ -196,10 +206,9 @@ def analyze_and_display(df, filename):
     c2.metric("平均点赞率", f"{avg_like_rate:.2%}")
     c3.metric("平均收藏率", f"{avg_fav_rate:.2%}")
     c4.metric("平均互动率", f"{avg_eng_rate:.2%}")
-    # ... (指标卡片代码结束) ...
 
     # ==============================================================================
-    # 🔥 HTML 报告生成逻辑 (重点修改部分)
+    # 🔥 HTML 报告生成逻辑 (按月份拆分图表)
     # ==============================================================================
     html_dir = "html_reports"
     os.makedirs(html_dir, exist_ok=True)
@@ -221,46 +230,49 @@ def analyze_and_display(df, filename):
         f"<h1>📊 {filename} 可视化分析报告</h1>"
     ]
 
-    # 1. 全局概览图 (体裁比例) - 这个保留全局的比较好
+    # --- 全局图表：体裁分布 ---
     fig_pie, ax_pie = plt.subplots(figsize=(6,6))
     pie_data = df["体裁"].value_counts()
     ax_pie.pie(pie_data, autopct="%1.1f%%", startangle=90, colors=["#ff9999","#66b3ff"])
     ax_pie.set_title("总体 图文 vs 视频比例")
     save_fig_to_html(fig_pie, "总体体裁分布", html_parts)
 
-    # 🔥🔥 重点修改：按月份循环生成图表 🔥🔥
+    # --- 🔥 分月图表生成循环 🔥 ---
     sorted_months = sorted(df['年月'].unique())
     
     for month in sorted_months:
-        # 筛选该月数据
+        # 1. 筛选出该月的数据 (使用 copy 以免影响原 df)
         df_month = df[df['年月'] == month].copy()
-        # 按时间重置排序
-        df_month.sort_values(by="首次发布时间", inplace=True)
-        df_month.reset_index(drop=True, inplace=True)
         
-        # 🔥 关键步骤：重置“序号”列
-        # 让该月的图表 X 轴显示 1, 2, 3... 代表该月第 1 篇、第 2 篇
+        # 2. 确保按时间正序排列
+        df_month.sort_values(by="首次发布时间", ascending=True, inplace=True)
+        
+        # 3. 重置索引，并重新生成“序号”列
+        # 这样该月的第一篇笔记序号就是 1，第二篇是 2...
+        df_month.reset_index(drop=True, inplace=True)
         df_month['序号'] = df_month.index + 1
         
         note_count = len(df_month)
         
-        # 添加月份标题分隔
-        html_parts.append(f"<h2>📅 {month} 月度详细分析 (共发布 {note_count} 篇)</h2>")
+        # 4. 写入月份标题
+        html_parts.append(f"<h2>📅 {month} 月度分析 (共 {note_count} 篇笔记)</h2>")
 
         if note_count > 0:
-            # 生成该月的核心互动图
+            # 5. 使用 df_month (而非 df) 生成图表
             fig1, ax1 = plot_core_interaction(df_month)
             save_fig_to_html(fig1, f"{month} - 核心互动指标趋势", html_parts)
 
-            # 生成该月的单指标趋势图
             for col in ["点赞率","收藏率","赞藏比","评论率","互动率","有效活跃度","转粉率"]:
                 fig, ax = plt.subplots(figsize=(12,4))
+                # 注意这里传的是 df_month
                 plot_lines(ax, f"{month} - {col} 趋势图", [col], df_month)
                 save_fig_to_html(fig, f"{month} - {col} 趋势图", html_parts)
         else:
             html_parts.append("<p>该月无有效数据。</p>")
 
     html_parts.append("</body></html>")
+    
+    # 保存与下载
     with open(html_path, "w", encoding="utf-8") as f:
         f.write("\n".join(html_parts))
 
@@ -310,14 +322,18 @@ if uploaded_files:
 
     if processed_dfs:
         # ==============================================================================
-        # 全景对比 & 环比分析 (代码保持不变，我折叠了以节省显示，请保持你原来的代码)
+        # 进阶功能：全景对比 & 环比分析
         # ==============================================================================
         st.markdown("---")
         st.header(" 账号/月份 核心指标趋势 & 环比分析", divider="orange")
         
         if all_data_list:
             df_all = pd.concat(all_data_list, ignore_index=True)
-            df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
+            
+            # 确保汇总分析时也有年月
+            if '年月' not in df_all.columns:
+                 df_all['年月'] = df_all['首次发布时间'].dt.to_period('M').astype(str)
+
             df_all['估算点击数'] = df_all['封面点击率'] * df_all['曝光']
 
             df_trend = df_all.groupby(['账号名', '年月']).agg({
@@ -327,6 +343,7 @@ if uploaded_files:
             df_trend['互动率'] = (df_trend['点赞'] + df_trend['收藏'] + df_trend['评论']) / df_trend['观看量'].replace(0, np.nan)
             df_trend['封面点击率'] = df_trend['估算点击数'] / df_trend['曝光'].replace(0, np.nan)
             df_trend.sort_values(by=['账号名', '年月'], ascending=[True, True], inplace=True)
+            
             df_trend['涨粉环比'] = df_trend.groupby('账号名')['涨粉'].pct_change()
             df_trend['互动率环比'] = df_trend.groupby('账号名')['互动率'].pct_change()
             df_trend['点击率环比'] = df_trend.groupby('账号名')['封面点击率'].pct_change()
@@ -353,7 +370,6 @@ if uploaded_files:
                                         txt = f"{y:.1%}" if is_percent else f"{int(y)}"
                                         ax.text(x, y, txt, ha='center', va='bottom', fontsize=12, 
                                                 color='black', path_effects=[path_effects.withStroke(linewidth=2, foreground="white")])
-                    # 修改：增加留白
                     ax.margins(y=0.5)  
                     ax.set_title(title_text, fontsize=16)
                     ax.set_xlabel("月份", fontsize=14)
@@ -365,7 +381,7 @@ if uploaded_files:
                         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
                     return fig
 
-                # 修改：3列布局
+                # 使用 3 列布局
                 col_g1, col_g2, col_g3 = st.columns(3)
                 with col_g1:
                     st.subheader("互动率 - 月度趋势")
@@ -377,7 +393,7 @@ if uploaded_files:
                     st.subheader("涨粉数 - 月度趋势")
                     st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
                 
-                # 数据表部分
+                # 数据表
                 st.markdown("---")
                 with st.expander("📋 点击展开：查看月度对比详细数据表（含环比增长率）", expanded=True):
                     display_cols = ['账号名', '年月', '涨粉', '涨粉环比', '互动率', '互动率环比', '封面点击率', '点击率环比', '曝光', '观看量']
