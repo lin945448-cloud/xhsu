@@ -129,7 +129,7 @@ def build_html_report(df: pd.DataFrame, filename: str) -> str:
     def fig_to_img_block(fig, caption: str) -> str:
         buf = io.BytesIO()
         # dpi 可以略微调低一点，减小体积和生成时间；不影响功能，只影响图片清晰度
-        fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
+        fig.savefig(buf, format="png", bbox_inches="tight", dpi=180)
         buf.seek(0)
         b64 = base64.b64encode(buf.read()).decode()
         plt.close(fig)
@@ -310,7 +310,7 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
             c4.metric(f"{month} 平均互动率", f"{m_avg_eng_rate:.2%}")
             st.markdown("---")
 
-    with st.expander("查看【全局累计】平均指标（所有月份汇总）"):
+    with st.expander("【全局累计】平均指标（所有月份汇总）"):
         total_views = df["观看量"].sum()
         total_expo = df["曝光"].sum()
         total_likes = df["点赞"].sum()
@@ -582,3 +582,4 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
+
