@@ -338,13 +338,18 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
                 (m_total_likes + m_total_comments + m_total_favs) / m_total_views
                 if m_total_views else 0
             )
+            
+            # --- 新增：平均阅读率计算 ---
+            m_avg_read_rate = m_total_views / m_total_expo if m_total_expo else 0
 
             st.markdown(f"**🗓️ {month} 月度表现 (共 {len(df_month)} 篇)**")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric(f"{month} 平均封面点击率", f"{m_avg_ctr:.2%}")
-            c2.metric(f"{month} 平均点赞率", f"{m_avg_like_rate:.2%}")
-            c3.metric(f"{month} 平均收藏率", f"{m_avg_fav_rate:.2%}")
-            c4.metric(f"{month} 平均互动率", f"{m_avg_eng_rate:.2%}")
+            # --- 修改：将4列改为5列，并添加阅读率展示 ---
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric(f"{month} 平均阅读率", f"{m_avg_read_rate:.2%}")
+            c2.metric(f"{month} 平均封面点击率", f"{m_avg_ctr:.2%}")
+            c3.metric(f"{month} 平均点赞率", f"{m_avg_like_rate:.2%}")
+            c4.metric(f"{month} 平均收藏率", f"{m_avg_fav_rate:.2%}")
+            c5.metric(f"{month} 平均互动率", f"{m_avg_eng_rate:.2%}")
             st.markdown("---")
 
     with st.expander("【全局累计】平均指标（所有月份汇总）"):
@@ -364,12 +369,17 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
             (total_likes + total_comments + total_favs) / total_views
             if total_views else 0
         )
+        
+        # --- 新增：全局平均阅读率计算 ---
+        g_avg_read_rate = total_views / total_expo if total_expo else 0
 
-        gc1, gc2, gc3, gc4 = st.columns(4)
-        gc1.metric("全局平均点击率", f"{g_avg_ctr:.2%}")
-        gc2.metric("全局平均点赞率", f"{g_avg_like_rate:.2%}")
-        gc3.metric("全局平均收藏率", f"{g_avg_fav_rate:.2%}")
-        gc4.metric("全局平均互动率", f"{g_avg_eng_rate:.2%}")
+        # --- 修改：将4列改为5列，并添加全局阅读率展示 ---
+        gc1, gc2, gc3, gc4, gc5 = st.columns(5)
+        gc1.metric("全局平均阅读率", f"{g_avg_read_rate:.2%}")
+        gc2.metric("全局平均点击率", f"{g_avg_ctr:.2%}")
+        gc3.metric("全局平均点赞率", f"{g_avg_like_rate:.2%}")
+        gc4.metric("全局平均收藏率", f"{g_avg_fav_rate:.2%}")
+        gc5.metric("全局平均互动率", f"{g_avg_eng_rate:.2%}")
 
     # 3. HTML 报告下载（不再写临时文件到硬盘，直接使用内存中的字符串）
     download_file_name = f"{os.path.splitext(filename)[0]}_可视化报告.html"
