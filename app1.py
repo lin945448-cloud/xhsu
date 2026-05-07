@@ -259,7 +259,35 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
         f"至 {df['首次发布时间'].max().date()}**"
     )
 
-    # 1. 显示分析后的数据表
+    # 1. 添加数据总览板块  <------------------  在这里添加
+    st.subheader("📊 数据总览")
+
+    # 计算总体指标
+    total_exposure = df["曝光"].sum()
+    total_views = df["观看量"].sum()
+    total_posts = len(df)
+    avg_exposure_per_post = total_exposure / total_posts if total_posts > 0 else 0
+    avg_views_per_post = total_views / total_posts if total_posts > 0 else 0
+
+    # 分月指标
+    monthly_data = df.groupby("年月").agg(
+        总曝光=("曝光", "sum"),
+        总观看量=("观看量", "sum"),
+    )
+
+    # 展示总体指标
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("总曝光", f"{total_exposure:,.0f}")
+    col2.metric("总观看量", f"{total_views:,.0f}")
+    col3.metric("平均每篇曝光", f"{avg_exposure_per_post:,.0f}")
+    col4.metric("平均每篇观看", f"{avg_views_per_post:,.0f}")
+
+    # 展示分月指标
+    st.subheader("按月指标")
+    st.dataframe(monthly_data.style.format("{:,.0f}"))
+    # --------------------------------------
+
+    # 2. 显示分析后的数据表
     st.subheader("分析后的数据表")
     show_cols = [
         "序号", "年月", "笔记标题", "首次发布时间", "体裁",
@@ -277,7 +305,7 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
         }, na_rep="--")
     )
 
-    # 2. 核心指标平均值（按月 + 全局）
+    # 3. 核心指标平均值（按月 + 全局）
     st.subheader("📈 核心指标平均值")
 
     with st.expander("📋 点击收起/展开：各月份详细平均指标数据", expanded=False):
@@ -334,7 +362,7 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
         gc3.metric("全局平均收藏率", f"{g_avg_fav_rate:.2%}")
         gc4.metric("全局平均互动率", f"{g_avg_eng_rate:.2%}")
 
-    # 3. HTML 报告下载（不再写临时文件到硬盘，直接使用内存中的字符串）
+    # 4. HTML 报告下载（不再写临时文件到硬盘，直接使用内存中的字符串）
     download_file_name = f"{os.path.splitext(filename)[0]}_可视化报告.html"
     st.success(f"✅ 已生成可视化报告文件：{download_file_name}")
     st.download_button(
@@ -582,4 +610,3 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
-
