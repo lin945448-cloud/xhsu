@@ -436,7 +436,7 @@ if uploaded_files:
 
     if processed_dfs:
         # ==============================================================================
-        # 进阶功能：全景对比 & 环比分析（保持原有逻辑）
+        # 进阶功能：全景对比 & 环比分析
         # ==============================================================================
         st.markdown("---")
         st.header(" 账号/月份 核心指标趋势 & 环比分析", divider="orange")
@@ -463,6 +463,12 @@ if uploaded_files:
             df_trend['封面点击率'] = (
                 df_trend['估算点击数'] / df_trend['曝光'].replace(0, np.nan)
             )
+            
+            # === 新增：计算阅读率、点赞率、收藏率 ===
+            df_trend['阅读率'] = df_trend['观看量'] / df_trend['曝光'].replace(0, np.nan)
+            df_trend['点赞率'] = df_trend['点赞'] / df_trend['观看量'].replace(0, np.nan)
+            df_trend['收藏率'] = df_trend['收藏'] / df_trend['观看量'].replace(0, np.nan)
+
             df_trend.sort_values(by=['账号名', '年月'],
                                  ascending=[True, True], inplace=True)
 
@@ -515,19 +521,39 @@ if uploaded_files:
                         )
                     return fig
 
+                # =========================================================
+                # 绘制 6 个趋势对比图
+                # =========================================================
+                # 第一排：阅读率、封面点击率
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
-                    st.subheader("互动率 - 月度趋势")
-                    st.pyplot(plot_compare_metric('互动率', '账号互动率月度走势', is_percent=True))
+                    st.subheader("阅读率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('阅读率', '账号阅读率月度走势', is_percent=True))
 
                 with col_g2:
                     st.subheader("封面点击率 - 月度趋势")
                     st.pyplot(plot_compare_metric('封面点击率', '账号封面点击率月度走势', is_percent=True))
 
+                # 第二排：点赞率、收藏率
                 col_g3, col_g4 = st.columns(2)
                 with col_g3:
+                    st.subheader("点赞率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('点赞率', '账号点赞率月度走势', is_percent=True))
+
+                with col_g4:
+                    st.subheader("收藏率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('收藏率', '账号收藏率月度走势', is_percent=True))
+
+                # 第三排：互动率、涨粉数
+                col_g5, col_g6 = st.columns(2)
+                with col_g5:
+                    st.subheader("互动率 - 月度趋势")
+                    st.pyplot(plot_compare_metric('互动率', '账号互动率月度走势', is_percent=True))
+
+                with col_g6:
                     st.subheader("涨粉数 - 月度趋势")
                     st.pyplot(plot_compare_metric('涨粉', '账号月度净涨粉走势', is_percent=False))
+                # =========================================================
 
                 st.markdown("---")
                 with st.expander(
