@@ -267,17 +267,39 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
     # 总体指标计算
     total_expo = df["曝光"].sum()
     total_views = df["观看量"].sum()
+    total_followers = df["涨粉"].sum()
     total_notes = len(df)
+    total_months = df['年月'].nunique()
+
+    # 篇均指标计算
     avg_expo = total_expo / total_notes if total_notes > 0 else 0
     avg_views = total_views / total_notes if total_notes > 0 else 0
+    avg_followers = total_followers / total_notes if total_notes > 0 else 0
 
-    # 总体呈现
+    # 月均指标计算
+    monthly_avg_expo = total_expo / total_months if total_months > 0 else 0
+    monthly_avg_views = total_views / total_months if total_months > 0 else 0
+    monthly_avg_followers = total_followers / total_months if total_months > 0 else 0
+
+    # 总体呈现 (修改为三行展示)
     with st.expander("【总体指标】所有月份汇总", expanded=True):
-        c1, c2, c3, c4 = st.columns(4)
+        st.markdown("**总计数据：**")
+        c1, c2, c3 = st.columns(3)
         c1.metric("总曝光", f"{total_expo:,.0f}")
         c2.metric("总观看量", f"{total_views:,.0f}")
-        c3.metric("平均每篇曝光", f"{avg_expo:,.0f}")
-        c4.metric("平均每篇观看", f"{avg_views:,.0f}")
+        c3.metric("总涨粉", f"{total_followers:,.0f}")
+        
+        st.markdown("**篇均数据：**")
+        c4, c5, c6 = st.columns(3)
+        c4.metric("平均每篇曝光", f"{avg_expo:,.0f}")
+        c5.metric("平均每篇观看", f"{avg_views:,.0f}")
+        c6.metric("平均每篇涨粉", f"{avg_followers:,.1f}")
+        
+        st.markdown("**月均数据：**")
+        c7, c8, c9 = st.columns(3)
+        c7.metric("平均每月曝光", f"{monthly_avg_expo:,.0f}")
+        c8.metric("平均每月观看", f"{monthly_avg_views:,.0f}")
+        c9.metric("平均每月涨粉数", f"{monthly_avg_followers:,.1f}")
 
     # 分月呈现
     with st.expander("📋 点击收起/展开：【分月指标】详细数据", expanded=False):
@@ -286,16 +308,22 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
             m_count = len(df_month)
             m_total_expo = df_month["曝光"].sum()
             m_total_views = df_month["观看量"].sum()
+            m_total_followers = df_month["涨粉"].sum()
+            
             m_avg_expo = m_total_expo / m_count if m_count > 0 else 0
             m_avg_views = m_total_views / m_count if m_count > 0 else 0
+            m_avg_followers = m_total_followers / m_count if m_count > 0 else 0
             
             st.markdown(f"**🗓️ {month} 月表现 (共 {m_count} 篇)**")
-            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
             mc1.metric(f"总曝光", f"{m_total_expo:,.0f}")
             mc2.metric(f"总观看量", f"{m_total_views:,.0f}")
-            mc3.metric(f"平均每篇曝光", f"{m_avg_expo:,.0f}")
-            mc4.metric(f"平均每篇观看", f"{m_avg_views:,.0f}")
+            mc3.metric(f"总涨粉", f"{m_total_followers:,.0f}")
+            mc4.metric(f"篇均曝光", f"{m_avg_expo:,.0f}")
+            mc5.metric(f"篇均观看", f"{m_avg_views:,.0f}")
+            mc6.metric(f"篇均涨粉", f"{m_avg_followers:,.1f}")
             st.markdown("---")
+            
     # =========================================================
     # 1. 显示分析后的数据表
     st.subheader("分析后的数据表")
@@ -318,6 +346,14 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
     # 2. 核心指标平均值（按月 + 全局）
     st.subheader("📈 核心指标平均值")
 
+    # 用于最后计算“月均各项比率”的列表容器
+    list_m_read_rate = []
+    list_m_ctr = []
+    list_m_like_rate = []
+    list_m_fav_rate = []
+    list_m_eng_rate = []
+    list_m_follow_rate = []
+
     with st.expander("📋 点击收起/展开：各月份详细平均指标数据", expanded=False):
         sorted_months = sorted(df['年月'].unique())
         for month in sorted_months:
@@ -328,6 +364,7 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
             m_total_likes = df_month["点赞"].sum()
             m_total_favs = df_month["收藏"].sum()
             m_total_comments = df_month["评论"].sum()
+            m_total_followers = df_month["涨粉"].sum()
 
             m_avg_ctr = (
                 (df_month["封面点击率"] * df_month["曝光"]).sum() / m_total_expo
@@ -339,26 +376,35 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
                 (m_total_likes + m_total_comments + m_total_favs) / m_total_views
                 if m_total_views else 0
             )
-            
-            # --- 新增：平均阅读率计算 ---
             m_avg_read_rate = m_total_views / m_total_expo if m_total_expo else 0
+            m_avg_follow_rate = m_total_followers / m_total_views if m_total_views else 0
+
+            # 将各项比率存入列表，用于计算最后的“算术月均”
+            list_m_read_rate.append(m_avg_read_rate)
+            list_m_ctr.append(m_avg_ctr)
+            list_m_like_rate.append(m_avg_like_rate)
+            list_m_fav_rate.append(m_avg_fav_rate)
+            list_m_eng_rate.append(m_avg_eng_rate)
+            list_m_follow_rate.append(m_avg_follow_rate)
 
             st.markdown(f"**🗓️ {month} 月度表现 (共 {len(df_month)} 篇)**")
-            # --- 修改：将4列改为5列，并添加阅读率展示 ---
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric(f"{month} 平均阅读率", f"{m_avg_read_rate:.2%}")
-            c2.metric(f"{month} 平均封面点击率", f"{m_avg_ctr:.2%}")
-            c3.metric(f"{month} 平均点赞率", f"{m_avg_like_rate:.2%}")
-            c4.metric(f"{month} 平均收藏率", f"{m_avg_fav_rate:.2%}")
-            c5.metric(f"{month} 平均互动率", f"{m_avg_eng_rate:.2%}")
+            # 改为 6 列
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            c1.metric(f"{month} 阅读率", f"{m_avg_read_rate:.2%}")
+            c2.metric(f"{month} 点击率", f"{m_avg_ctr:.2%}")
+            c3.metric(f"{month} 点赞率", f"{m_avg_like_rate:.2%}")
+            c4.metric(f"{month} 收藏率", f"{m_avg_fav_rate:.2%}")
+            c5.metric(f"{month} 互动率", f"{m_avg_eng_rate:.2%}")
+            c6.metric(f"{month} 涨粉率", f"{m_avg_follow_rate:.2%}")
             st.markdown("---")
 
-    with st.expander("【全局累计】平均指标（所有月份汇总）"):
+    with st.expander("【全局累计】平均指标（按篇）"):
         total_views = df["观看量"].sum()
         total_expo = df["曝光"].sum()
         total_likes = df["点赞"].sum()
         total_favs = df["收藏"].sum()
         total_comments = df["评论"].sum()
+        total_followers = df["涨粉"].sum()
 
         g_avg_ctr = (
             (df["封面点击率"] * df["曝光"]).sum() / total_expo
@@ -370,17 +416,38 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
             (total_likes + total_comments + total_favs) / total_views
             if total_views else 0
         )
-        
-        # --- 新增：全局平均阅读率计算 ---
         g_avg_read_rate = total_views / total_expo if total_expo else 0
+        g_avg_follow_rate = total_followers / total_views if total_views else 0
 
-        # --- 修改：将4列改为5列，并添加全局阅读率展示 ---
-        gc1, gc2, gc3, gc4, gc5 = st.columns(5)
+        # 改为 6 列
+        gc1, gc2, gc3, gc4, gc5, gc6 = st.columns(6)
         gc1.metric("全局平均阅读率", f"{g_avg_read_rate:.2%}")
-        gc2.metric("全局平均点击率", f"{g_avg_ctr:.2%}")
+        gc2.metric("全局平均封面点击率", f"{g_avg_ctr:.2%}")
         gc3.metric("全局平均点赞率", f"{g_avg_like_rate:.2%}")
         gc4.metric("全局平均收藏率", f"{g_avg_fav_rate:.2%}")
         gc5.metric("全局平均互动率", f"{g_avg_eng_rate:.2%}")
+        gc6.metric("全局平均涨粉率", f"{g_avg_follow_rate:.2%}")
+
+    # --- 新增的月均各项比率卡片 ---
+    with st.expander("【月均指标】各项比率的月度平均水平", expanded=True):
+        st.caption("注：此处计算逻辑为【各月份比率的算术平均值】(即将每个月的转化率相加，再除以总月数)，用以衡量常规月份的平均内容表现，剔除了某单个月份流量畸高导致的全局数据倾斜。")
+        num_m = len(list_m_read_rate)
+        
+        final_m_read_rate = sum(list_m_read_rate) / num_m if num_m else 0
+        final_m_ctr = sum(list_m_ctr) / num_m if num_m else 0
+        final_m_like_rate = sum(list_m_like_rate) / num_m if num_m else 0
+        final_m_fav_rate = sum(list_m_fav_rate) / num_m if num_m else 0
+        final_m_eng_rate = sum(list_m_eng_rate) / num_m if num_m else 0
+        final_m_follow_rate = sum(list_m_follow_rate) / num_m if num_m else 0
+
+        mac1, mac2, mac3, mac4, mac5, mac6 = st.columns(6)
+        mac1.metric("月均阅读率", f"{final_m_read_rate:.2%}")
+        mac2.metric("月均封面点击率", f"{final_m_ctr:.2%}")
+        mac3.metric("月均点赞率", f"{final_m_like_rate:.2%}")
+        mac4.metric("月均收藏率", f"{final_m_fav_rate:.2%}")
+        mac5.metric("月均互动率", f"{final_m_eng_rate:.2%}")
+        mac6.metric("月均涨粉率", f"{final_m_follow_rate:.2%}")
+
 
     # 3. HTML 报告下载（不再写临时文件到硬盘，直接使用内存中的字符串）
     download_file_name = f"{os.path.splitext(filename)[0]}_可视化报告.html"
