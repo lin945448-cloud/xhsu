@@ -222,6 +222,7 @@ def analyze_file_cached(file_bytes: bytes, filename: str):
 
     # 3. 生成“年月”和“序号”（每月从 1 开始）
     df['年月'] = df['首次发布时间'].dt.to_period('M').astype(str)
+    df.insert(df.columns.get_loc("年月") + 1, "月份", df['首次发布时间'].dt.month)
     df.insert(0, "序号", df.groupby("年月").cumcount() + 1)
 
     # 4. 数值转换
@@ -299,7 +300,7 @@ def render_single_file(df: pd.DataFrame, filename: str, html_str: str):
     # 1. 显示分析后的数据表
     st.subheader("分析后的数据表")
     show_cols = [
-        "序号", "年月", "笔记标题", "首次发布时间", "体裁",
+        "序号", "年月","月份" "笔记标题", "首次发布时间", "体裁",
         "曝光", "观看量", "封面点击率",
         "点赞", "评论", "收藏", "涨粉", "分享",
         "点赞率", "收藏率", "互动率", "转粉率", "赞藏比", "有效活跃度"
@@ -626,21 +627,41 @@ if uploaded_files:
             else:
                 st.warning("暂无数据可用于生成透视表。")
 
+
+
+
         # ==============================================================================
-        # 汇总 Excel 下载（保持原逻辑）
         # ==============================================================================
+        # 汇总 Excel 下载（自动转换百分比及小数控制，并确保都拆分出月份）
+        # ==============================================================================
+        def format_excel_data(df_export):
+            df_fmt = df_export.copy()
+            # 针对如月度统计表没有"月份"列时自动补齐
+            if '年月' in df_fmt.columns and '月份' not in df_fmt.columns:
+                df_fmt.insert(df_fmt.columns.get_loc('年月') + 1, '月份', df_fmt['年月'].str.split('-').str[-1].astype(int))
+                
+            for col in df_fmt.columns:
+                if '率' in col or '环比' in col:
+                    if pd.api.types.is_numeric_dtype(df_fmt[col]):
+                        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else x)
+                elif pd.api.types.is_numeric_dtype(df_fmt[col]):
+                    # 避免对“序号”和“月份”强加小数
+                    if col not in ['序号', '月份']:
+                        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else x)
+            return df_fmt
+
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             for name, d in processed_dfs.items():
-                d.to_excel(writer, sheet_name=name, index=False)
+                format_excel_data(d).to_excel(writer, sheet_name=name, index=False)
             if all_data_list:
-                pd.concat(all_data_list, ignore_index=True).to_excel(
+                format_excel_data(pd.concat(all_data_list, ignore_index=True)).to_excel(
                     writer,
                     sheet_name="所有数据明细汇总",
                     index=False
                 )
             if 'df_trend' in locals() and not df_trend.empty:
-                df_trend.to_excel(writer, sheet_name="月度统计(含环比)", index=False)
+                format_excel_data(df_trend).to_excel(writer, sheet_name="月度统计(含环比)", index=False)
 
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
