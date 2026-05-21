@@ -630,13 +630,15 @@ if uploaded_files:
 
 
         # ==============================================================================
-        # 汇总 Excel 下载（原生 OpenPyXL 格式化，确保 Excel 识别为真实数字而非文本）
+        # 汇总 Excel 下载（原生 OpenPyXL 格式化，修复 Numpy 类型导致格式失效的问题）
         # ==============================================================================
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             
-            # 定义需要加千位分隔符的整数列
-            integer_cols_with_comma = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享", "人均观看时长", "弹幕"]
+            # 定义需要加千位分隔符且不要小数的整数列
+            integer_cols = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享", "人均观看时长", "弹幕"]
+            # 排除完全不需要加数字格式的文本和基础排序列
+            exclude_cols = ["账号名", "年月", "月份", "序号", "笔记标题", "首次发布时间", "体裁"]
 
             def write_and_format_sheet(df_data, sheet_name):
                 df_export = df_data.copy()
@@ -645,35 +647,36 @@ if uploaded_files:
                 if '年月' in df_export.columns and '月份' not in df_export.columns:
                     df_export.insert(df_export.columns.get_loc('年月') + 1, '月份', df_export['年月'].str.split('-').str[-1].astype(int))
                 
-                # 将空值替换为 '--'，其余的保留为原生的数字类型
+                # 将缺失值替换为 '--'
                 df_export.fillna('--', inplace=True)
                 
-                # 写入原生数据（不转字符串），让 Excel 能识别为真实的数字
+                # 写入 Excel（此时保留的是原生 numpy 数字格式）
                 df_export.to_excel(writer, sheet_name=sheet_name, index=False)
                 
-                # 获取该 sheet 对象，直接修改 Excel 底层单元格的数字格式（Number Format）
+                # 获取底层的 sheet 对象
                 worksheet = writer.sheets[sheet_name]
                 
+                # 遍历所有列进行格式分配
                 for idx, col_name in enumerate(df_export.columns):
-                    col_idx = idx + 1  # openpyxl 的列索引从 1 开始
+                    col_idx = idx + 1
                     
+                    # 纯靠列名匹配格式
                     excel_fmt = None
-                    # 判断当前列应当适用哪种 Excel 格式代码
-                    if col_name in integer_cols_with_comma:
+                    if col_name in integer_cols:
                         excel_fmt = '#,##0'                 # 千位分隔符，无小数
                     elif '环比' in str(col_name):
-                        excel_fmt = '+0.0%;-0.0%;0.0%'      # 带正负号的百分比，一位小数
+                        excel_fmt = '+0.0%;-0.0%;0.0%'      # 环比：带正负号百分比，1位小数
                     elif '率' in str(col_name):
-                        excel_fmt = '0.00%'                 # 百分比，两位小数
-                    elif pd.api.types.is_float_dtype(df_data[col_name]) and col_name not in ['序号', '月份']:
-                        excel_fmt = '0.0'                   # 其他浮点数，一位小数
+                        excel_fmt = '0.00%'                 # 率：百分比，2位小数
+                    elif col_name not in exclude_cols:
+                        excel_fmt = '0.0'                   # 其他衍生指标（如赞藏比等）：1位小数
 
                     if excel_fmt:
                         # 从第二行开始遍历单元格（跳过第一行的表头）
                         for row in range(2, len(df_export) + 2):
                             cell = worksheet.cell(row=row, column=col_idx)
-                            # 只有当单元格是原生数字类型时，才赋予格式（防止把 '--' 报错）
-                            if isinstance(cell.value, (int, float)):
+                            # 只要不是占位符 '--'，我们就强行赋予数字格式！
+                            if str(cell.value) != '--':
                                 cell.number_format = excel_fmt
 
             # 1. 写入每个独立文件的sheet
@@ -702,4 +705,3 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
-
