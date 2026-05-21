@@ -630,21 +630,27 @@ if uploaded_files:
 
 
         # ==============================================================================
-        # 汇总 Excel 下载（自动转换百分比及小数控制，并确保都拆分出月份）
+        # 汇总 Excel 下载（自动转换百分比及小数控制，包含千位符格式化）
         # ==============================================================================
         def format_excel_data(df_export):
             df_fmt = df_export.copy()
             # 针对如月度统计表没有"月份"列时自动补齐
             if '年月' in df_fmt.columns and '月份' not in df_fmt.columns:
                 df_fmt.insert(df_fmt.columns.get_loc('年月') + 1, '月份', df_fmt['年月'].str.split('-').str[-1].astype(int))
-                
+            
+            # 定义需要千位符且不要小数点的列
+            int_cols = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享", "人均观看时长", "弹幕"]
+            
             for col in df_fmt.columns:
-                if '率' in col or '环比' in col:
-                    if pd.api.types.is_numeric_dtype(df_fmt[col]):
+                if pd.api.types.is_numeric_dtype(df_fmt[col]):
+                    if '率' in col or '环比' in col:
+                        # 包含“率”或“环比”的保留两位小数的百分比
                         df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else x)
-                elif pd.api.types.is_numeric_dtype(df_fmt[col]):
-                    # 避免对“序号”和“月份”强加小数
-                    if col not in ['序号', '月份']:
+                    elif col in int_cols:
+                        # 基础数据加上千位分隔符，不要小数点
+                        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else x)
+                    elif col not in ['序号', '月份']:
+                        # 其他衍生数据（如赞藏比、有效活跃度）保留一位小数
                         df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else x)
             return df_fmt
 
