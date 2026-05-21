@@ -704,7 +704,4 @@ if uploaded_files:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
     st.info("👆 请上传Excel文件开始分析。")
-    else:
-        st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
-else:
-    st.info("👆 请上传Excel文件开始分析。")
+
