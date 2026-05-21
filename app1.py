@@ -630,64 +630,66 @@ if uploaded_files:
 
 
         # ==============================================================================
-        # 汇总 Excel 下载（原生 OpenPyXL 格式化，确保 Excel 识别为真实数字而非文本）
+        # 汇总 Excel 下载（最终正确版本：使用Excel原生格式代码，确保数据为数字）
         # ==============================================================================
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             
             # 定义需要加千位分隔符的整数列
-            integer_cols_with_comma = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享", "人均观看时长", "弹幕"]
+            integer_cols_with_comma = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享"]
 
-            def write_and_format_sheet(df_data, sheet_name):
-                df_export = df_data.copy()
-                
-                # 确保月份列存在
-                if '年月' in df_export.columns and '月份' not in df_export.columns:
-                    df_export.insert(df_export.columns.get_loc('年月') + 1, '月份', df_export['年月'].str.split('-').str[-1].astype(int))
-                
-                # 将空值替换为 '--'，其余的保留为原生的数字类型
-                df_export.fillna('--', inplace=True)
-                
-                # 写入原生数据（不转字符串），让 Excel 能识别为真实的数字
-                df_export.to_excel(writer, sheet_name=sheet_name, index=False)
-                
-                # 获取该 sheet 对象，直接修改 Excel 底层单元格的数字格式（Number Format）
-                worksheet = writer.sheets[sheet_name]
-                
-                for idx, col_name in enumerate(df_export.columns):
-                    col_idx = idx + 1  # openpyxl 的列索引从 1 开始
-                    
-                    excel_fmt = None
-                    # 判断当前列应当适用哪种 Excel 格式代码
-                    if col_name in integer_cols_with_comma:
-                        excel_fmt = '#,##0'                 # 千位分隔符，无小数
-                    elif '环比' in str(col_name):
-                        excel_fmt = '+0.0%;-0.0%;0.0%'      # 带正负号的百分比，一位小数
-                    elif '率' in str(col_name):
-                        excel_fmt = '0.00%'                 # 百分比，两位小数
-                    elif pd.api.types.is_float_dtype(df_data[col_name]) and col_name not in ['序号', '月份']:
-                        excel_fmt = '0.0'                   # 其他浮点数，一位小数
-
-                    if excel_fmt:
-                        # 从第二行开始遍历单元格（跳过第一行的表头）
-                        for row in range(2, len(df_export) + 2):
-                            cell = worksheet.cell(row=row, column=col_idx)
-                            # 只有当单元格是原生数字类型时，才赋予格式（防止把 '--' 报错）
-                            if isinstance(cell.value, (int, float)):
-                                cell.number_format = excel_fmt
+            # 创建一个可复用的格式化函数，这次使用EXCEL的原生格式代码
+            def get_formatter(df):
+                # 这个字典现在包含的是Excel的单元格格式代码，而不是Python的f-string格式
+                formatter = {}
+                for col in df.columns:
+                    if col in integer_cols_with_comma:
+                        formatter[col] = '#,##0'  # Excel格式：千位分隔符，无小数
+                    elif '环比' in str(col):
+                        formatter[col] = '+0.0%;-0.0%;0.0%' # Excel格式：带正负号的百分比，一位小数
+                    elif '率' in str(col):
+                        formatter[col] = '0.00%'  # Excel格式：百分比，两位小数
+                    # 此条件捕获其他未被处理的浮点数列，如“赞藏比”
+                    elif pd.api.types.is_float_dtype(df[col]) and col not in ['序号', '月份']:
+                        formatter[col] = '0.0'   # Excel格式：普通数字，一位小数
+                return formatter
 
             # 1. 写入每个独立文件的sheet
             for name, d in processed_dfs.items():
-                write_and_format_sheet(d, name)
+                # 确保月份列存在，以防万一
+                if '年月' in d.columns and '月份' not in d.columns:
+                   d.insert(d.columns.get_loc('年月') + 1, '月份', d['年月'].str.split('-').str[-1].astype(int))
+                
+                d.style.format(get_formatter(d), na_rep='--').to_excel(
+                    writer, 
+                    sheet_name=name, 
+                    index=False, 
+                    engine='openpyxl'
+                )
 
             # 2. 写入“所有数据明细汇总”sheet
             if all_data_list:
                 df_all_summary = pd.concat(all_data_list, ignore_index=True)
-                write_and_format_sheet(df_all_summary, "所有数据明细汇总")
+                df_all_summary.style.format(get_formatter(df_all_summary), na_rep='--').to_excel(
+                    writer,
+                    sheet_name="所有数据明细汇总",
+                    index=False,
+                    engine='openpyxl'
+                )
 
             # 3. 写入“月度统计(含环比)”sheet
             if 'df_trend' in locals() and not df_trend.empty:
-                write_and_format_sheet(df_trend, "月度统计(含环比)")
+                df_trend_copy = df_trend.copy()
+                # 确保月份列存在
+                if '年月' in df_trend_copy.columns and '月份' not in df_trend_copy.columns:
+                   df_trend_copy.insert(df_trend_copy.columns.get_loc('年月') + 1, '月份', df_trend_copy['年月'].str.split('-').str[-1].astype(int))
+
+                df_trend_copy.style.format(get_formatter(df_trend_copy), na_rep='--').to_excel(
+                    writer, 
+                    sheet_name="月度统计(含环比)", 
+                    index=False, 
+                    engine='openpyxl'
+                )
 
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
@@ -698,6 +700,10 @@ if uploaded_files:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         st.balloons()
+    else:
+        st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
+else:
+    st.info("👆 请上传Excel文件开始分析。")
     else:
         st.error("没有文件被成功处理，无法生成汇总报告。请检查上方报错信息。")
 else:
