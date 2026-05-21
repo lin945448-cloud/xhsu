@@ -695,81 +695,89 @@ if uploaded_files:
                 st.warning("暂无数据可用于生成透视表。")
 
             # ==============================================================================
-            # 新增板块：品类（体裁）维度数据透视
+            # 新增板块：品类维度数据透视
             # ==============================================================================
             st.markdown("---")
-            st.header("📂 品类（体裁）维度指标汇总", divider="green")
+            st.header("📂 品类维度指标汇总", divider="green")
             
             # 为了不影响其他逻辑，使用拷贝进行计算
             df_cat = df_all.copy()
-            # 确保必要列存在
-            if '估算点击数' not in df_cat.columns:
-                df_cat['估算点击数'] = df_cat['封面点击率'] * df_cat['曝光']
-            df_cat['总互动数'] = df_cat['点赞'] + df_cat['评论'] + df_cat['收藏']
             
-            # 1. 总体指标汇总
-            overall_cat = df_cat.groupby('体裁').agg(
-                笔记数=('序号', 'count'),
-                曝光=('曝光', 'sum'),
-                阅读=('观看量', 'sum'),
-                总估算点击=('估算点击数', 'sum'),
-                总互动=('总互动数', 'sum'),
-                转粉=('涨粉', 'sum')
-            ).reset_index()
-            
-            # 计算加权后的率
-            overall_cat['封面点击率'] = overall_cat['总估算点击'] / overall_cat['曝光'].replace(0, np.nan)
-            overall_cat['互动率'] = overall_cat['总互动'] / overall_cat['阅读'].replace(0, np.nan)
-            overall_cat['转粉率'] = overall_cat['转粉'] / overall_cat['阅读'].replace(0, np.nan)
-            
-            res_overall = overall_cat[['体裁', '笔记数', '曝光', '阅读', '封面点击率', '互动率', '转粉率']].copy()
-            
-            # 2. 月均指标汇总
-            # 先按体裁和年月汇总当月指标
-            monthly_cat = df_cat.groupby(['体裁', '年月']).agg(
-                月笔记数=('序号', 'count'),
-                月曝光=('曝光', 'sum'),
-                月阅读=('观看量', 'sum'),
-                月总估算点击=('估算点击数', 'sum'),
-                月总互动=('总互动数', 'sum'),
-                月转粉=('涨粉', 'sum')
-            ).reset_index()
-            
-            # 计算当月各项率
-            monthly_cat['月点击率'] = monthly_cat['月总估算点击'] / monthly_cat['月曝光'].replace(0, np.nan)
-            monthly_cat['月互动率'] = monthly_cat['月总互动'] / monthly_cat['月阅读'].replace(0, np.nan)
-            monthly_cat['月转粉率'] = monthly_cat['月转粉'] / monthly_cat['月阅读'].replace(0, np.nan)
-            
-            # 再按体裁计算各月份的算术平均值
-            monthly_avg_cat = monthly_cat.groupby('体裁').agg(
-                月均笔记数=('月笔记数', 'mean'),
-                月均曝光=('月曝光', 'mean'),
-                月均阅读=('月阅读', 'mean'),
-                月均封面点击率=('月点击率', 'mean'),
-                月均互动率=('月互动率', 'mean'),
-                月均转粉率=('月转粉率', 'mean')
-            ).reset_index()
-            
-            # 3. 拼接总体与月均，并展示
-            final_cat_df = pd.merge(res_overall, monthly_avg_cat, on='体裁', how='left')
-            
-            st.write("**📊 提取所有文件中的品类（体裁），按其划分的各项核心表现如下：**")
-            st.dataframe(
-                final_cat_df.style.format({
-                    '笔记数': '{:,.0f}',
-                    '曝光': '{:,.0f}',
-                    '阅读': '{:,.0f}',
-                    '封面点击率': '{:.2%}',
-                    '互动率': '{:.2%}',
-                    '转粉率': '{:.2%}',
-                    '月均笔记数': '{:,.1f}',
-                    '月均曝光': '{:,.0f}',
-                    '月均阅读': '{:,.0f}',
-                    '月均封面点击率': '{:.2%}',
-                    '月均互动率': '{:.2%}',
-                    '月均转粉率': '{:.2%}'
-                }, na_rep="--")
-            )
+            # 检查原始数据中是否存在“品类”列，避免报错崩溃
+            if '品类' in df_cat.columns:
+                # 填充空值以防 groupby 遗漏
+                df_cat['品类'] = df_cat['品类'].fillna('未分类')
+                
+                # 确保必要列存在
+                if '估算点击数' not in df_cat.columns:
+                    df_cat['估算点击数'] = df_cat['封面点击率'] * df_cat['曝光']
+                df_cat['总互动数'] = df_cat['点赞'] + df_cat['评论'] + df_cat['收藏']
+                
+                # 1. 总体指标汇总
+                overall_cat = df_cat.groupby('品类').agg(
+                    笔记数=('序号', 'count'),
+                    曝光=('曝光', 'sum'),
+                    阅读=('观看量', 'sum'),
+                    总估算点击=('估算点击数', 'sum'),
+                    总互动=('总互动数', 'sum'),
+                    转粉=('涨粉', 'sum')
+                ).reset_index()
+                
+                # 计算加权后的率
+                overall_cat['封面点击率'] = overall_cat['总估算点击'] / overall_cat['曝光'].replace(0, np.nan)
+                overall_cat['互动率'] = overall_cat['总互动'] / overall_cat['阅读'].replace(0, np.nan)
+                overall_cat['转粉率'] = overall_cat['转粉'] / overall_cat['阅读'].replace(0, np.nan)
+                
+                res_overall = overall_cat[['品类', '笔记数', '曝光', '阅读', '封面点击率', '互动率', '转粉率']].copy()
+                
+                # 2. 月均指标汇总
+                # 先按品类和年月汇总当月指标
+                monthly_cat = df_cat.groupby(['品类', '年月']).agg(
+                    月笔记数=('序号', 'count'),
+                    月曝光=('曝光', 'sum'),
+                    月阅读=('观看量', 'sum'),
+                    月总估算点击=('估算点击数', 'sum'),
+                    月总互动=('总互动数', 'sum'),
+                    月转粉=('涨粉', 'sum')
+                ).reset_index()
+                
+                # 计算当月各项率
+                monthly_cat['月点击率'] = monthly_cat['月总估算点击'] / monthly_cat['月曝光'].replace(0, np.nan)
+                monthly_cat['月互动率'] = monthly_cat['月总互动'] / monthly_cat['月阅读'].replace(0, np.nan)
+                monthly_cat['月转粉率'] = monthly_cat['月转粉'] / monthly_cat['月阅读'].replace(0, np.nan)
+                
+                # 再按品类计算各月份的算术平均值
+                monthly_avg_cat = monthly_cat.groupby('品类').agg(
+                    月均笔记数=('月笔记数', 'mean'),
+                    月均曝光=('月曝光', 'mean'),
+                    月均阅读=('月阅读', 'mean'),
+                    月均封面点击率=('月点击率', 'mean'),
+                    月均互动率=('月互动率', 'mean'),
+                    月均转粉率=('月转粉率', 'mean')
+                ).reset_index()
+                
+                # 3. 拼接总体与月均，并展示
+                final_cat_df = pd.merge(res_overall, monthly_avg_cat, on='品类', how='left')
+                
+                st.write("**📊 提取所有文件中的品类，按其划分的各项核心表现如下：**")
+                st.dataframe(
+                    final_cat_df.style.format({
+                        '笔记数': '{:,.0f}',
+                        '曝光': '{:,.0f}',
+                        '阅读': '{:,.0f}',
+                        '封面点击率': '{:.2%}',
+                        '互动率': '{:.2%}',
+                        '转粉率': '{:.2%}',
+                        '月均笔记数': '{:,.1f}',
+                        '月均曝光': '{:,.0f}',
+                        '月均阅读': '{:,.0f}',
+                        '月均封面点击率': '{:.2%}',
+                        '月均互动率': '{:.2%}',
+                        '月均转粉率': '{:.2%}'
+                    }, na_rep="--")
+                )
+            else:
+                st.warning("⚠️ 在上传的表格中未找到名为【品类】的列，无法生成品类维度的透视分析，请检查您的原始 Excel 结构。")
 
 
         # ==============================================================================
@@ -781,7 +789,7 @@ if uploaded_files:
             # 定义需要加千位分隔符且不要小数的整数列
             integer_cols = ["曝光", "观看量", "点赞", "评论", "收藏", "涨粉", "分享", "人均观看时长", "弹幕"]
             # 排除完全不需要加数字格式的文本和基础排序列
-            exclude_cols = ["账号名", "年月", "月份", "序号", "笔记标题", "首次发布时间", "体裁"]
+            exclude_cols = ["账号名", "年月", "月份", "序号", "笔记标题", "首次发布时间", "体裁", "品类"]
 
             def write_and_format_sheet(df_data, sheet_name):
                 df_export = df_data.copy()
