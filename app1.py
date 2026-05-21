@@ -630,38 +630,57 @@ if uploaded_files:
 
 
 
+        # 汇总 Excel 下载（应用了新的格式化逻辑）
         # ==============================================================================
-        # ==============================================================================
-        # 汇总 Excel 下载（自动转换百分比及小数控制，并确保都拆分出月份）
-        # ==============================================================================
-        def format_excel_data(df_export):
-            df_fmt = df_export.copy()
-            # 针对如月度统计表没有"月份"列时自动补齐
-            if '年月' in df_fmt.columns and '月份' not in df_fmt.columns:
-                df_fmt.insert(df_fmt.columns.get_loc('年月') + 1, '月份', df_fmt['年月'].str.split('-').str[-1].astype(int))
-                
-            for col in df_fmt.columns:
-                if '率' in col or '环比' in col:
-                    if pd.api.types.is_numeric_dtype(df_fmt[col]):
-                        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else x)
-                elif pd.api.types.is_numeric_dtype(df_fmt[col]):
-                    # 避免对“序号”和“月份”强加小数
-                    if col not in ['序号', '月份']:
-                        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else x)
-            return df_fmt
-
         excel_buffer = io.BytesIO()
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            # 1. 处理每个独立文件的sheet
             for name, d in processed_dfs.items():
-                format_excel_data(d).to_excel(writer, sheet_name=name, index=False)
+                formatter = {}
+                for col in d.columns:
+                    # 只对浮点数类型的列进行格式化
+                    if pd.api.types.is_float_dtype(d[col]):
+                        if '率' in col:
+                            formatter[col] = '{:.2%}'  # 带"率"的列，格式化为百分比，两位小数
+                        else:
+                            formatter[col] = '{:.1f}'  # 其他浮点数列，格式化为一位小数
+                d.style.format(formatter, na_rep='--').to_excel(writer, sheet_name=name, index=False, engine='openpyxl')
+
+            # 2. 处理“所有数据明细汇总”sheet
             if all_data_list:
-                format_excel_data(pd.concat(all_data_list, ignore_index=True)).to_excel(
+                df_all_summary = pd.concat(all_data_list, ignore_index=True)
+                formatter = {}
+                for col in df_all_summary.columns:
+                    if pd.api.types.is_float_dtype(df_all_summary[col]):
+                        if '率' in col:
+                            formatter[col] = '{:.2%}'
+                        else:
+                            formatter[col] = '{:.1f}'
+                df_all_summary.style.format(formatter, na_rep='--').to_excel(
                     writer,
                     sheet_name="所有数据明细汇总",
-                    index=False
+                    index=False,
+                    engine='openpyxl'
                 )
+
+            # 3. 处理“月度统计(含环比)”sheet
             if 'df_trend' in locals() and not df_trend.empty:
-                format_excel_data(df_trend).to_excel(writer, sheet_name="月度统计(含环比)", index=False)
+                # 月度统计表格式化（环比数据保持百分比）
+                trend_formatter = {}
+                for col in df_trend.columns:
+                    if pd.api.types.is_float_dtype(df_trend[col]):
+                        if '环比' in col:
+                            trend_formatter[col] = '{:+.1%}' # 环比数据格式
+                        elif '率' in col:
+                            trend_formatter[col] = '{:.2%}' # 率数据格式
+                        else:
+                            trend_formatter[col] = '{:.1f}' # 其他浮点数格式
+                df_trend.style.format(trend_formatter, na_rep='--').to_excel(
+                    writer, 
+                    sheet_name="月度统计(含环比)", 
+                    index=False, 
+                    engine='openpyxl'
+                )
 
         with placeholder_top.container():
             st.header("汇总Excel下载", divider="rainbow")
